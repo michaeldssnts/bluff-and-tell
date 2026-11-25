@@ -657,7 +657,7 @@ svg {
 }
 .settings-grid .field-row {
   display: grid;
-  grid-template-columns: 1fr 118px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 16px;
 }

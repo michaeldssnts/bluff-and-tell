@@ -423,6 +423,7 @@ function gameSummary(settings) {
   if (room.flowVersion === 2) {
     const n = settings.totalRounds ?? 6,
       people = room.players.length;
+    if (people < 2) return `${n} rounds total. Invite at least one other player; the time estimate updates as people join.`;
     const minimum = Math.ceil(n * (1 + people * 0.1)),
       maximum = Math.ceil(n * (2 + people * 0.15));
     return `${n} rounds for ${people} players · about ${minimum}–${maximum} minutes. Estimate includes voting and results; chatting can take longer. ${n < people ? "Choose at least " + people + " rounds to feature everyone." : n % people ? "Featured turns rotate; some players get one extra turn." : "Everyone gets the same number of featured turns."}`;
