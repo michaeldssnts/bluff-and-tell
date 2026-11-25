@@ -1,4 +1,4 @@
-const CACHE = "bluff-and-tell-v14";
+const CACHE = "bluff-and-tell-v15";
 const ASSETS = [
   "/",
   "/index.html",

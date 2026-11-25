@@ -544,7 +544,7 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       break;
     }
     case "replay":
-      host();
+      // Anyone can call a rematch; it takes the whole room back to the lobby.
       fail(room.phase === "finished", "Finish this game first.");
       for (const p of room.players) {
         p.promptHistory = normalisePromptHistory([

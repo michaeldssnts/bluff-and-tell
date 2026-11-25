@@ -915,3 +915,13 @@ test("saving answers without locking in does not start the game", () => {
   apply(g.room, g.tokens[0], "begin", {}, at);
   assert.equal(g.room.phase, "voting");
 });
+
+test("any player can call a rematch from the final scores", () => {
+  const g = prepared();
+  for (let i = 0; i < 100 && g.room.phase !== "finished"; i++) advance(g.room, g.tokens[0]);
+  assert.equal(g.room.phase, "finished");
+  apply(g.room, g.tokens[2], "replay", {}, at);
+  assert.equal(g.room.phase, "lobby");
+  assert.equal(g.room.players.length, 3);
+  assert.ok(g.room.players.every((p) => p.score === 0));
+});
