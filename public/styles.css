@@ -2563,3 +2563,28 @@ textarea[aria-invalid="true"] {
   font-size: inherit;
   font-weight: 800;
 }
+
+#invite-qr-dialog {
+  max-width: 440px;
+  text-align: center;
+}
+#invite-qr-dialog h2 {
+  font-size: clamp(1.7rem, 6vw, 2.3rem);
+}
+#invite-qr-canvas {
+  display: block;
+  width: min(100%, 300px);
+  height: auto;
+  margin: 24px auto 16px;
+  background: white;
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+.qr-backup strong {
+  color: var(--lime);
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+#invite-qr-local {
+  font-size: 0.8rem;
+}

@@ -1,9 +1,11 @@
-const CACHE = "bluff-and-tell-v25";
+const CACHE = "bluff-and-tell-v26";
 const ASSETS = [
   "/",
   "/index.html",
   "/styles.css",
   "/app.js",
+  "/invite-qr.js",
+  "/vendor/qrcode.js",
   "/game-options.js",
   "/share-card.js",
   "/icon.svg",

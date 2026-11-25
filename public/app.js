@@ -1,3 +1,4 @@
+import { createInviteQr, roomInviteUrl, sessionForInvite } from "/invite-qr.js";
 import { GAME_LENGTHS, estimateMinutes, progressState } from "/game-options.js";
 import { drawShareCard, drawVictoryCard, cardBlob } from "/share-card.js";
 const $ = (s, root = document) => root.querySelector(s);
@@ -92,6 +93,7 @@ let inviteCode = (params.get("room") ?? "")
   .toUpperCase()
   .replace(/[^A-Z2-9]/g, "")
   .slice(0, 6);
+session = sessionForInvite(session, inviteCode);
 const toast = (message) => {
   const el = $("#toast");
   el.textContent = message;
@@ -161,7 +163,7 @@ function lobby() {
   const needsProfiles =
     room.flowVersion !== 2 &&
     room.players.some((p) => p.profileReady === false);
-  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">GOOD COMPANY. QUESTIONABLE ANSWERS.</span><h1>The room is yours.</h1><p>${isHost() ? "Grab your people. Pick your chaos. Let’s go." : "You’re in. Your host is rounding up the suspects."}</p></div><span class="pill lime">${icon("users", 16)} ${room.players.length}/8 players</span></div>${demoNote()}${room.flowVersion === 2 ? "" : roomProfile()}<div class="game-layout"><div><section class="room-invite"><span class="eyebrow">YOUR INVITE CODE</span><div class="room-code">${esc(room.code)}</div><p>One phone each. Send them the link.</p><div class="invite-actions"><button class="button" data-copy-link>${icon("link", 15)} Copy invite link</button><button class="button secondary" data-copy-code>${icon("copy", 15)} Copy code</button></div></section><section class="panel"><div class="panel-title"><h2>Your people</h2>${isHost() ? `<button class="text-button" data-action="lock">${icon("lock", 15)} ${room.locked ? "Unlock lobby" : "Lock lobby"}</button>` : ""}</div>${roster()}${room.players.length < 8 ? `<div class="empty-slot"><span class="avatar">+</span>${room.players.length === 2 ? "Two is all you need. Start whenever you’re ready." : "There’s room for more questionable characters."}</div>` : ""}</section></div><section class="panel"><div class="panel-title"><h2>${icon("shuffle", 19)} Set the vibe</h2><span class="pill purple">${isHost() ? "Host controls" : "Game settings"}</span></div><div class="settings-grid"><div class="field-row"><label for="game-mode">Game type<small>${room.demo ? "Demo bots can bluff. Cameras? Not so much." : "Truths, silly faces, doodles. Photos need your camera."}</small></label><select id="game-mode" data-mode ${!isHost() || room.demo ? "disabled" : ""}>${[
+  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">GOOD COMPANY. QUESTIONABLE ANSWERS.</span><h1>The room is yours.</h1><p>${isHost() ? "Grab your people. Pick your chaos. Let’s go." : "You’re in. Your host is rounding up the suspects."}</p></div><span class="pill lime">${icon("users", 16)} ${room.players.length}/8 players</span></div>${demoNote()}${room.flowVersion === 2 ? "" : roomProfile()}<div class="game-layout"><div><section class="room-invite"><span class="eyebrow">YOUR INVITE CODE</span><div class="room-code">${esc(room.code)}</div><p>One phone each. Send them the link.</p><div class="invite-actions"><button class="button" data-copy-link>${icon("link", 15)} Copy invite link</button><button class="button secondary" data-copy-code>${icon("copy", 15)} Copy code</button>${isHost() && !room.demo ? `<button class="button secondary" type="button" data-show-qr>${icon("phone", 15)} Show QR code</button>` : ""}</div></section><section class="panel"><div class="panel-title"><h2>Your people</h2>${isHost() ? `<button class="text-button" data-action="lock">${icon("lock", 15)} ${room.locked ? "Unlock lobby" : "Lock lobby"}</button>` : ""}</div>${roster()}${room.players.length < 8 ? `<div class="empty-slot"><span class="avatar">+</span>${room.players.length === 2 ? "Two is all you need. Start whenever you’re ready." : "There’s room for more questionable characters."}</div>` : ""}</section></div><section class="panel"><div class="panel-title"><h2>${icon("shuffle", 19)} Set the vibe</h2><span class="pill purple">${isHost() ? "Host controls" : "Game settings"}</span></div><div class="settings-grid"><div class="field-row"><label for="game-mode">Game type<small>${room.demo ? "Demo bots can bluff. Cameras? Not so much." : "Truths, silly faces, doodles. Photos need your camera."}</small></label><select id="game-mode" data-mode ${!isHost() || room.demo ? "disabled" : ""}>${[
     ["classic", "Truth & lies"],
     ["faces", "Face off (photos)"],
     ["doodles", "Doodle off (drawing)"],
@@ -1278,6 +1280,26 @@ async function poll() {
     polling = false;
   }
 }
+async function showInviteQr() {
+  if (!isHost() || room.phase !== "lobby" || room.demo) return;
+  const code = room.code;
+  try {
+    const origin = await inviteOriginPromise;
+    if (room?.code !== code || room.phase !== "lobby") return;
+    const qr = createInviteQr(origin, code);
+    const canvas = $("#invite-qr-canvas");
+    canvas.width = canvas.height = qr.width;
+    const context = canvas.getContext("2d");
+    const image = context.createImageData(qr.width, qr.width);
+    image.data.set(qr.pixels);
+    context.putImageData(image, 0, 0);
+    $("#invite-qr-code").textContent = code;
+    $("#invite-qr-local").hidden = !isLocalPreview;
+    $("#invite-qr-dialog").showModal();
+  } catch {
+    toast("QR took a wrong turn. Copy the invite link instead.");
+  }
+}
 async function copy(text, message) {
   try {
     await navigator.clipboard.writeText(text);
@@ -1652,12 +1674,12 @@ document.addEventListener("click", async (e) => {
     confirmRemove(t);
   } else if (t.matches("[data-copy-code]"))
     copy(room.code, "Room code copied. Send it to your people.");
+  else if (t.matches("[data-show-qr]")) showInviteQr();
   else if (t.matches("[data-copy-link]")) {
     const origin = await inviteOriginPromise;
-    const invite = new URL("/", origin);
-    invite.searchParams.set("room", room.code);
+    const invite = roomInviteUrl(origin, room.code);
     copy(
-      invite.href,
+      invite,
       isLocalPreview
         ? "Invite copied. This preview link works on your Wi-Fi while this computer stays on."
         : "Invite link copied. Paste it into WhatsApp, email, Teams, or anywhere else.",

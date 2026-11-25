@@ -22,6 +22,39 @@
     <a class="skip-link" href="#main">Skip to game</a>
     <div id="app"></div>
     <div id="toast" role="status" aria-live="polite"></div>
+    <dialog
+      id="invite-qr-dialog"
+      aria-labelledby="invite-qr-title"
+      aria-describedby="invite-qr-hint"
+    >
+      <button
+        class="icon-button close-dialog"
+        type="button"
+        data-close-dialog
+        aria-label="Close QR code"
+      >
+        ×
+      </button>
+      <span class="eyebrow">YOUR CREW’S WAY IN</span>
+      <h2 id="invite-qr-title">Scan. Join. Stir trouble.</h2>
+      <p id="invite-qr-hint">
+        Scan with your camera. Pick a nickname. Join the chaos.
+      </p>
+      <canvas
+        id="invite-qr-canvas"
+        role="img"
+        aria-label="Scan this QR code to open the room invite"
+      ></canvas>
+      <p class="qr-backup">
+        Camera shy? Room code: <strong id="invite-qr-code"></strong>
+      </p>
+      <p id="invite-qr-local" class="muted" hidden>
+        Local preview: same Wi-Fi, please.
+      </p>
+      <button class="button primary full" type="button" data-copy-link>
+        Copy invite link
+      </button>
+    </dialog>
     <dialog id="help-dialog" aria-labelledby="help-title">
       <button
         class="icon-button close-dialog"
