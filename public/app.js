@@ -516,7 +516,8 @@ const PAD_SIZE = 400,
 let penDown = false;
 let pad = { questionId: null, strokes: [], colour: PAD_COLOURS[0][0], size: 6, editing: true, error: "" };
 // Keep an unfinished drawing on this device, so a refresh or dropped connection doesn't lose it.
-const padKey = (questionId) => `bt-doodle-${session?.code}-${questionId}`;
+const padKey = (questionId) =>
+  `bt-doodle-${session?.code}-${room?.me}-${questionId}`;
 function savePad() {
   try {
     sessionStorage.setItem(padKey(pad.questionId), JSON.stringify(pad.strokes));
@@ -673,7 +674,7 @@ function doodleScreen() {
           label = own ? "Your drawing" : `Drawing ${i + 1}`;
         return `<div class="face-choice ${chosen ? "chosen" : ""}">${facePhoto(id, label, "doodle")}${
           own
-            ? `<span class="face-own">${icon("lock", 15)} Your drawing</span>`
+            ? `<span class="face-own">${icon("lock", 15)} You can’t vote for your own</span>`
             : canJudge
               ? `<button class="button ${chosen ? "primary" : "secondary"} full" type="button" data-face-vote="${id}" aria-pressed="${chosen}">${chosen ? icon("check", 16) + " Your vote" : `Vote for drawing ${i + 1}`}</button>`
               : ""
