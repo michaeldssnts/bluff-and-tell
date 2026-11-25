@@ -2423,3 +2423,62 @@ textarea[aria-invalid="true"] {
 .host-controls .host-transfer {
   flex-basis: 100%;
 }
+
+/* ---- Doodle off ---- */
+.doodle-prompt {
+  text-align: center;
+  margin: 8px 0 12px;
+}
+.doodle-pad-wrap {
+  display: grid;
+  gap: 12px;
+  max-width: 400px;
+  margin: 8px auto 0;
+}
+#doodle-pad {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 16px;
+  border: 2px solid var(--lime);
+  background: #fff;
+  touch-action: none;
+  cursor: crosshair;
+}
+.pad-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+.swatch {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3px solid #ffffff30;
+  background: var(--swatch);
+}
+.swatch.active {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px var(--purple);
+}
+.pad-tool {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #ffffff08;
+  color: var(--ink);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.pad-error {
+  text-align: center;
+  margin: 0;
+}
+.face-photo.doodle img {
+  background: #fff;
+}

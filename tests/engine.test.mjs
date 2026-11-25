@@ -974,7 +974,7 @@ test("a face-off round: pose, copy, judge, reveal, then photos are cleared", () 
   );
   assert.throws(
     () => apply(g.room, copiers[0], "face-vote", { questionId: q.id, playerId: q.playerId }, at),
-    /one of the copies/,
+    /one of the entries/,
   );
   apply(g.room, poser, "face-vote", { questionId: q.id, playerId: firstId }, at);
   apply(g.room, copiers[0], "face-vote", { questionId: q.id, playerId: secondId }, at);
@@ -1000,7 +1000,7 @@ test("face off is off for under-13s and in the demo", () => {
   const demo = newRoom("Solo", true, at, "adult");
   assert.throws(
     () => apply(demo.room, demo.token, "settings", { mode: "mixed" }, at),
-    /real cameras/,
+    /can’t take photos or draw/,
   );
   assert.throws(
     () => apply(demo.room, demo.token, "settings", { mode: "silly" }, at),
@@ -1035,7 +1035,7 @@ test("the host can skip a missing poser or close photos early", () => {
   assert.equal(g.room.phase, "reveal");
   assert.notEqual(first.id, q.id);
 });
-test("mixed games add one face-off per player after the writing step", () => {
+test("mixed games add one face-off or doodle per player after the writing step", () => {
   const g = group();
   apply(g.room, g.tokens[0], "settings", { mode: "mixed" }, at);
   apply(g.room, g.tokens[0], "start", {}, at);
@@ -1053,11 +1053,85 @@ test("mixed games add one face-off per player after the writing step", () => {
     ),
   );
   const types = g.room.queue.map((q) => q.type ?? "truth");
-  assert.equal(types.filter((t) => t === "face").length, 3);
+  assert.equal(types.filter((t) => t === "face").length, 2);
+  assert.equal(types.filter((t) => t === "doodle").length, 1);
   assert.equal(types.filter((t) => t === "truth").length, 3);
   assert.equal(g.room.phase, "voting");
   // Nobody poses straight after their own truth question.
   g.room.queue.forEach((q, i) => {
-    if (q.type === "face") assert.notEqual(q.playerId, g.room.queue[i - 1].playerId);
+    if (q.type && q.type !== "truth")
+      assert.notEqual(q.playerId, g.room.queue[i - 1].playerId);
   });
+});
+
+// ---- Doodle off ----
+test("a doodle round: everyone draws, entries stay private, the room votes for the funniest", () => {
+  const g = faceGame("doodles");
+  assert.equal(g.room.phase, "drawing");
+  const q = g.room.queue[0];
+  assert.equal(q.type, "doodle");
+  assert.match(q.title, /^Draw /);
+  assert.ok(q.title.includes(g.room.players.find((p) => p.id === q.playerId).name));
+  const ids = g.room.players.map((p) => p.id);
+  apply(g.room, g.tokens[0], "photo", { questionId: q.id, image: photo("D0") }, at);
+  // While drawing, you only ever see your own drawing.
+  assert.deepEqual(Object.keys(photosFor(g.room, g.tokens[0], at).photos), [ids[0]]);
+  assert.deepEqual(photosFor(g.room, g.tokens[1], at).photos, {});
+  // Redrawing replaces your entry.
+  apply(g.room, g.tokens[0], "photo", { questionId: q.id, image: photo("D1") }, at);
+  apply(g.room, g.tokens[1], "photo", { questionId: q.id, image: photo("D2") }, at);
+  assert.equal(g.room.phase, "drawing");
+  apply(g.room, g.tokens[2], "photo", { questionId: q.id, image: photo("D3") }, at);
+  assert.equal(g.room.phase, "judging");
+  assert.equal(Object.keys(photosFor(g.room, g.tokens[2], at).photos).length, 3);
+  // The featured player's drawing can win too; your own can't get your vote.
+  assert.throws(
+    () => apply(g.room, g.tokens[1], "face-vote", { questionId: q.id, playerId: ids[1] }, at),
+    /own photo/,
+  );
+  apply(g.room, g.tokens[0], "face-vote", { questionId: q.id, playerId: q.playerId === ids[0] ? ids[1] : q.playerId }, at);
+  apply(g.room, g.tokens[1], "face-vote", { questionId: q.id, playerId: ids[2] }, at);
+  apply(g.room, g.tokens[2], "face-vote", { questionId: q.id, playerId: ids[1] }, at);
+  tick(g.room, g.room.deadline);
+  assert.equal(g.room.phase, "reveal");
+  assert.equal(g.room.results[0].type, "doodle");
+  assert.equal(g.room.results[0].copies.length, 3);
+  assert.equal(
+    g.room.players.reduce((sum, p) => sum + p.score, 0),
+    6,
+  );
+});
+test("doodle rounds work for under-13s; mixed rooms with a child get doodles instead of photos", () => {
+  const { room, token } = newRoom("Parent", false, at, "adult");
+  const child = joinRoom(room, "Robin", at, "child");
+  apply(room, token, "settings", { mode: "doodles" }, at);
+  apply(room, token, "start", {}, at);
+  assert.equal(room.phase, "drawing");
+  const mixed = newRoom("Parent", false, at, "adult");
+  const kid = joinRoom(mixed.room, "Robin", at, "child");
+  apply(mixed.room, mixed.token, "settings", { mode: "mixed" }, at);
+  apply(mixed.room, mixed.token, "start", {}, at);
+  for (const t of [mixed.token, kid])
+    apply(
+      mixed.room,
+      t,
+      "answers",
+      {
+        answers: [{ promptId: firstPrompt(mixed.room, t), truth: "Real", lie: "Fake" }],
+        submitted: true,
+      },
+      at,
+    );
+  const types = mixed.room.queue.map((q) => q.type ?? "truth");
+  assert.equal(types.includes("face"), false);
+  assert.equal(types.filter((t) => t === "doodle").length, 2);
+  assert.ok(child);
+});
+test("each doodle round in a game gets a different prompt", () => {
+  const { room, token } = newRoom("Ana", false, at, "adult");
+  for (const name of ["Ben", "Cal", "Dee", "Eli", "Fay", "Gus", "Hal"]) joinRoom(room, name, at, "adult");
+  apply(room, token, "settings", { mode: "doodles", questionsPerPlayer: 2 }, at);
+  apply(room, token, "start", {}, at);
+  const templates = room.queue.map((q, i) => q.title.replace(room.players.find((p) => p.id === q.playerId).name, "{name}"));
+  assert.equal(new Set(templates).size, room.queue.length);
 });

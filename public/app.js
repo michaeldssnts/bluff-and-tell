@@ -29,6 +29,9 @@ const icons = {
   camera:
     '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   crown: '<path d="m3 8 4 4 5-7 5 7 4-4-2 11H5z"/>',
+  pencil: '<path d="m4 20 4-1 11-11-3-3L5 16zM14 6l3 3"/>',
+  undo: '<path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-2"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
 };
 const icon = (name, size = 18) =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] ?? icons.sparkles}</svg>`;
@@ -138,7 +141,7 @@ function controls() {
         : "") +
       '<p class="muted center" style="font-size:.8rem;margin:18px 0">Your choices stay private until the reveal. Your host can skip ahead if someone steps away.</p>'
     );
-  return `<div class="host-controls">${room.deadline || room.pausedRemaining !== null ? `<button class="button secondary small" data-action="pause">${icon(room.pausedRemaining !== null ? "play" : "pause", 15)} ${room.pausedRemaining !== null ? "Resume" : "Pause"}</button>` : ""}${["reading", "discussion", "story"].includes(room.phase) ? '<button class="button secondary small" data-action="extend">' + icon("plus", 15) + " Add a minute</button>" : ""}${["reading", "discussion", "voting", "story", "posing", "copying", "judging"].includes(room.phase) ? `<button class="button soft small" data-action="next" ${room.pausedRemaining !== null ? "disabled" : ""}>${room.phase === "posing" ? "Skip this face-off" : room.phase === "copying" ? "Close photos and start judging" : room.phase === "judging" ? "Close voting and reveal" : room.phase === "voting" ? (waitingOn().length ? "Close voting and reveal" : "Reveal now") : room.phase === "discussion" ? "Open voting" : room.phase === "reveal" ? "Hear the story" : room.phase === "story" ? "Next question" : "Start discussion"}</button>` : ""}${
+  return `<div class="host-controls">${room.deadline || room.pausedRemaining !== null ? `<button class="button secondary small" data-action="pause">${icon(room.pausedRemaining !== null ? "play" : "pause", 15)} ${room.pausedRemaining !== null ? "Resume" : "Pause"}</button>` : ""}${["reading", "discussion", "story"].includes(room.phase) ? '<button class="button secondary small" data-action="extend">' + icon("plus", 15) + " Add a minute</button>" : ""}${["reading", "discussion", "voting", "story", "posing", "copying", "drawing", "judging"].includes(room.phase) ? `<button class="button soft small" data-action="next" ${room.pausedRemaining !== null ? "disabled" : ""}>${room.phase === "posing" ? "Skip this face-off" : room.phase === "drawing" ? "Close drawings and start voting" : room.phase === "copying" ? "Close photos and start judging" : room.phase === "judging" ? "Close voting and reveal" : room.phase === "voting" ? (waitingOn().length ? "Close voting and reveal" : "Reveal now") : room.phase === "discussion" ? "Open voting" : room.phase === "reveal" ? "Hear the story" : room.phase === "story" ? "Next question" : "Start discussion"}</button>` : ""}${
     room.players.some((p) => p.id !== room.me && !p.bot)
       ? `<label for="host-transfer" class="host-transfer-label">Hand over hosting</label><select class="host-transfer" id="host-transfer" data-transfer><option value="">Choose a player…</option>${room.players
           .filter((p) => p.id !== room.me && !p.bot)
@@ -153,13 +156,14 @@ function roomProfile() {
 function lobby() {
   const settings = room.settings;
   const needsProfiles = room.players.some((p) => p.profileReady === false);
-  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">GOOD COMPANY. QUESTIONABLE ANSWERS.</span><h1>The room is yours.</h1><p>${isHost() ? "Invite your friends, set the mood, and get ready to question everything." : "You’re in. Make yourself comfortable while your host gets everyone together."}</p></div><span class="pill lime">${icon("users", 16)} ${room.players.length}/8 players</span></div>${demoNote()}${roomProfile()}<div class="game-layout"><div><section class="room-invite"><span class="eyebrow">YOUR INVITE CODE</span><div class="room-code">${esc(room.code)}</div><p>Open this website on another phone and enter the code.</p><div class="invite-actions"><button class="button" data-copy-link>${icon("link", 15)} Copy invite link</button><button class="button secondary" data-copy-code>${icon("copy", 15)} Copy code</button></div></section><section class="panel"><div class="panel-title"><h2>Your people</h2>${isHost() ? `<button class="text-button" data-action="lock">${icon("lock", 15)} ${room.locked ? "Unlock lobby" : "Lock lobby"}</button>` : ""}</div>${roster()}${room.players.length < 8 ? `<div class="empty-slot"><span class="avatar">+</span>${room.players.length === 2 ? "Two is all you need. Start whenever you’re ready." : "There’s room for more questionable characters."}</div>` : ""}</section></div><section class="panel"><div class="panel-title"><h2>${icon("shuffle", 19)} Set the vibe</h2><span class="pill purple">${isHost() ? "Host controls" : "Game settings"}</span></div><div class="settings-grid"><div class="field-row"><label for="game-mode">Game type<small>${room.demo ? "Face off needs real cameras, so the demo is truth and lies only." : "Face off: copy each other’s silly faces with your camera. Switched off for players under 13."}</small></label><select id="game-mode" data-mode ${!isHost() || room.demo ? "disabled" : ""}>${[
+  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">GOOD COMPANY. QUESTIONABLE ANSWERS.</span><h1>The room is yours.</h1><p>${isHost() ? "Invite your friends, set the mood, and get ready to question everything." : "You’re in. Make yourself comfortable while your host gets everyone together."}</p></div><span class="pill lime">${icon("users", 16)} ${room.players.length}/8 players</span></div>${demoNote()}${roomProfile()}<div class="game-layout"><div><section class="room-invite"><span class="eyebrow">YOUR INVITE CODE</span><div class="room-code">${esc(room.code)}</div><p>Open this website on another phone and enter the code.</p><div class="invite-actions"><button class="button" data-copy-link>${icon("link", 15)} Copy invite link</button><button class="button secondary" data-copy-code>${icon("copy", 15)} Copy code</button></div></section><section class="panel"><div class="panel-title"><h2>Your people</h2>${isHost() ? `<button class="text-button" data-action="lock">${icon("lock", 15)} ${room.locked ? "Unlock lobby" : "Lock lobby"}</button>` : ""}</div>${roster()}${room.players.length < 8 ? `<div class="empty-slot"><span class="avatar">+</span>${room.players.length === 2 ? "Two is all you need. Start whenever you’re ready." : "There’s room for more questionable characters."}</div>` : ""}</section></div><section class="panel"><div class="panel-title"><h2>${icon("shuffle", 19)} Set the vibe</h2><span class="pill purple">${isHost() ? "Host controls" : "Game settings"}</span></div><div class="settings-grid"><div class="field-row"><label for="game-mode">Game type<small>${room.demo ? "The demo players can’t take photos or draw, so the demo is truth and lies only." : "Face off: copy each other’s silly faces (off for under-13s). Doodle off: draw silly prompts about each other, fine for all ages."}</small></label><select id="game-mode" data-mode ${!isHost() || room.demo ? "disabled" : ""}>${[
     ["classic", "Truth & lies"],
     ["faces", "Face off (photos)"],
+    ["doodles", "Doodle off (drawing)"],
     ["mixed", "Mixed"],
   ]
     .map(([v, l]) => `<option value="${v}" ${(settings.mode ?? "classic") === v ? "selected" : ""}>${l}</option>`)
-    .join("")}</select></div><div class="field-row"><label for="game-length">Game length<small>Everyone gets an equal turn.</small></label><select id="game-length" data-setting="questionsPerPlayer" ${!isHost() ? "disabled" : ""}><option value="1" ${settings.questionsPerPlayer === 1 ? "selected" : ""}>Quick game</option><option value="2" ${settings.questionsPerPlayer === 2 ? "selected" : ""}>Full game</option></select></div></div><p class="settings-note">${gameSummary(settings)} No timers: each step moves on once everyone is ready.<br><br>Correct guess: <strong>+2 points.</strong><br>Someone picks your lie: <strong>+1 point.</strong><br>Nobody spots your truth: <strong>+1 bonus.</strong>${(settings.mode ?? "classic") !== "classic" ? "<br>Each vote for your face-off copy: <strong>+2 points.</strong>" : ""}</p>${isHost() ? `<button class="button primary full" data-action="start" ${room.players.length < 2 || needsProfiles ? "disabled" : ""}>${icon("play", 18)} ${room.players.length < 2 ? "Waiting for your second player…" : needsProfiles ? "Waiting for player profiles…" : "Start the game"}</button>` : '<div class="note center">Waiting for your host to start the game.</div>' + (room.hostAway ? '<button class="button secondary full" data-action="claim-host">Take over as host (host disconnected)</button>' : "")}<div class="note">${icon("shield", 17)} <strong>Keep it comfortable.</strong> Skip anything too personal. Great stories beat embarrassing secrets.</div></section></div><div class="actions-row"><button class="text-button" data-leave>${icon("logout", 16)} ${room.demo ? "Exit demo" : "Leave room"}</button></div></main>${footer()}`;
+    .join("")}</select></div><div class="field-row"><label for="game-length">Game length<small>Everyone gets an equal turn.</small></label><select id="game-length" data-setting="questionsPerPlayer" ${!isHost() ? "disabled" : ""}><option value="1" ${settings.questionsPerPlayer === 1 ? "selected" : ""}>Quick game</option><option value="2" ${settings.questionsPerPlayer === 2 ? "selected" : ""}>Full game</option></select></div></div><p class="settings-note">${gameSummary(settings)} No timers: each step moves on once everyone is ready.<br><br>Correct guess: <strong>+2 points.</strong><br>Someone picks your lie: <strong>+1 point.</strong><br>Nobody spots your truth: <strong>+1 bonus.</strong>${(settings.mode ?? "classic") !== "classic" ? "<br>Each vote for your face-off copy or doodle: <strong>+2 points.</strong>" : ""}</p>${isHost() ? `<button class="button primary full" data-action="start" ${room.players.length < 2 || needsProfiles ? "disabled" : ""}>${icon("play", 18)} ${room.players.length < 2 ? "Waiting for your second player…" : needsProfiles ? "Waiting for player profiles…" : "Start the game"}</button>` : '<div class="note center">Waiting for your host to start the game.</div>' + (room.hostAway ? '<button class="button secondary full" data-action="claim-host">Take over as host (host disconnected)</button>' : "")}<div class="note">${icon("shield", 17)} <strong>Keep it comfortable.</strong> Skip anything too personal. Great stories beat embarrassing secrets.</div></section></div><div class="actions-row"><button class="text-button" data-leave>${icon("logout", 16)} ${room.demo ? "Exit demo" : "Leave room"}</button></div></main>${footer()}`;
 }
 function draftKey() {
   return "bt-draft-" + session.code;
@@ -290,7 +294,8 @@ function waitingPanel() {
 function roundPoints(playerId) {
   const result = room.result;
   if (!result) return 0;
-  if (result.type === "face") return (result.tally?.[playerId] ?? 0) * 2;
+  if (["face", "doodle"].includes(result.type))
+    return (result.tally?.[playerId] ?? 0) * 2;
   const pick = result.picks.find((p) => p.playerId === playerId);
   return (
     (pick?.points ?? 0) +
@@ -306,7 +311,7 @@ function profileCard() {
   const p = me();
   if (!p) return "";
   const delta = room.result ? roundPoints(p.id) : null;
-  return `<section class="my-profile" aria-label="Your profile">${avatar(p)}<div class="my-profile-name"><span class="eyebrow">YOUR PROFILE</span><strong>${esc(p.name)}</strong><small>Rank ${rankOf(p)} of ${room.players.length}${(room.settings.mode ?? "classic") === "faces" ? "" : ` · ${p.correct} ${p.correct === 1 ? "truth" : "truths"} spotted · ${p.fooled} fooled`}</small></div><div class="my-profile-score">${delta !== null ? `<span class="delta ${delta ? "up" : ""}">+${delta} this round</span>` : ""}<span class="points">${p.score}<small>pts</small></span></div></section>`;
+  return `<section class="my-profile" aria-label="Your profile">${avatar(p)}<div class="my-profile-name"><span class="eyebrow">YOUR PROFILE</span><strong>${esc(p.name)}</strong><small>Rank ${rankOf(p)} of ${room.players.length}${["faces", "doodles"].includes(room.settings.mode ?? "classic") ? "" : ` · ${p.correct} ${p.correct === 1 ? "truth" : "truths"} spotted · ${p.fooled} fooled`}</small></div><div class="my-profile-score">${delta !== null ? `<span class="delta ${delta ? "up" : ""}">+${delta} this round</span>` : ""}<span class="points">${p.score}<small>pts</small></span></div></section>`;
 }
 function noVoteWarning() {
   return `<div class="no-vote-warning" role="status">${icon("alert", 24)}<div><strong>You can’t vote on your own question</strong><p>${room.phase === "voting" ? "Everyone else is voting now. Keep a straight face while they guess." : "When voting opens, everyone else picks. Your job is to keep a straight face."}</p></div></div>`;
@@ -375,8 +380,10 @@ function gameSummary(settings) {
     mode = settings.mode ?? "classic";
   return mode === "faces"
     ? `${plural(n, "face-off round", "face-off rounds")}.`
+    : mode === "doodles"
+      ? `${plural(n, "doodle round", "doodle rounds")}.`
     : mode === "mixed"
-      ? `${plural(n, "truth question", "truth questions")} and ${plural(room.players.length, "face-off round", "face-off rounds")}.`
+      ? `${plural(n, "truth question", "truth questions")} and ${plural(room.players.length, "face-off or doodle round", "face-off or doodle rounds")}.`
       : `${plural(n, "question", "questions")}.`;
 }
 // ---- Face off: one player pulls a face, everyone copies it, the room votes on the best copy. ----
@@ -389,7 +396,7 @@ const photoOf = (id) =>
     : null;
 async function loadPhotos() {
   const q = room?.question;
-  if (q?.type !== "face") return;
+  if (!["face", "doodle"].includes(q?.type)) return;
   const key = [q.id, room.phase, ...(room.shotIds ?? [])].join("|");
   if (key === photoKey) return;
   photoKey = key;
@@ -496,6 +503,220 @@ function faceResults() {
       : "No votes this round.";
   return `<p class="face-headline">${headline}</p>${grid}<p class="muted face-rule">Each vote for your copy: +2</p>`;
 }
+// ---- Doodle off: everyone draws the same prompt; the room votes for the funniest. ----
+const PAD_SIZE = 400,
+  PAD_COLOURS = [
+    ["#211439", "Black"],
+    ["#e5484d", "Red"],
+    ["#2f80ed", "Blue"],
+    ["#27ae60", "Green"],
+    ["#f2b705", "Yellow"],
+  ];
+// Strokes live here, not in the canvas, so a screen refresh never wipes a drawing in progress.
+let penDown = false;
+let pad = { questionId: null, strokes: [], colour: PAD_COLOURS[0][0], size: 6, editing: true, error: "" };
+// Keep an unfinished drawing on this device, so a refresh or dropped connection doesn't lose it.
+const padKey = (questionId) => `bt-doodle-${session?.code}-${questionId}`;
+function savePad() {
+  try {
+    sessionStorage.setItem(padKey(pad.questionId), JSON.stringify(pad.strokes));
+  } catch {}
+}
+function resetPad(questionId) {
+  let strokes = [];
+  try {
+    strokes = JSON.parse(sessionStorage.getItem(padKey(questionId))) ?? [];
+  } catch {}
+  pad = { questionId, strokes, colour: PAD_COLOURS[0][0], size: 6, editing: true, error: "" };
+}
+function drawStrokes(ctx) {
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, PAD_SIZE, PAD_SIZE);
+  ctx.lineCap = ctx.lineJoin = "round";
+  for (const stroke of pad.strokes) {
+    ctx.strokeStyle = ctx.fillStyle = stroke.colour;
+    ctx.lineWidth = stroke.size;
+    const [first, ...rest] = stroke.points;
+    if (!rest.length) {
+      ctx.beginPath();
+      ctx.arc(first[0], first[1], stroke.size / 2, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
+    ctx.beginPath();
+    ctx.moveTo(...first);
+    for (const point of rest) ctx.lineTo(...point);
+    ctx.stroke();
+  }
+}
+// Called after every render: wire up the canvas (if it's on screen) and redraw the strokes.
+function mountPad() {
+  const canvas = $("#doodle-pad");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  drawStrokes(ctx);
+  let current = null;
+  const at = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return [
+      ((e.clientX - r.left) / r.width) * PAD_SIZE,
+      ((e.clientY - r.top) / r.height) * PAD_SIZE,
+    ];
+  };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    penDown = true;
+    current = { colour: pad.colour, size: pad.size, points: [at(e)] };
+    pad.strokes.push(current);
+    if (pad.error) {
+      pad.error = "";
+      const msg = $("#pad-error");
+      if (msg) msg.hidden = true;
+    }
+    drawStrokes(ctx);
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!current) return;
+    current.points.push(at(e));
+    drawStrokes(ctx);
+  });
+  const end = () => {
+    if (current) savePad();
+    current = null;
+    penDown = false;
+    // Catch up on anything that changed while the pen was down.
+    if (room) render();
+  };
+  canvas.addEventListener("pointerup", end);
+  canvas.addEventListener("pointercancel", end);
+}
+async function sendDrawing() {
+  if (photoBusy) return;
+  if (!pad.strokes.length) {
+    pad.error = "Draw something first, even a stick figure counts.";
+    render(true);
+    return;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = PAD_SIZE;
+  drawStrokes(canvas.getContext("2d"));
+  let quality = 0.8,
+    image = canvas.toDataURL("image/jpeg", quality);
+  while (image.length > 56000 && quality > 0.3)
+    image = canvas.toDataURL("image/jpeg", (quality -= 0.1));
+  photoBusy = true;
+  render(true);
+  const questionId = room.question.id;
+  try {
+    photoCache =
+      photoCache.questionId === questionId
+        ? { questionId, photos: { ...photoCache.photos, [room.me]: image } }
+        : { questionId, photos: { [room.me]: image } };
+    await send("photo", { questionId, image });
+    pad.editing = false;
+  } catch {
+    toast("Your drawing didn’t send. Check your connection and try again.");
+  } finally {
+    photoBusy = false;
+    render(true);
+  }
+}
+function padMarkup() {
+  return `<div class="doodle-pad-wrap"><canvas id="doodle-pad" width="${PAD_SIZE}" height="${PAD_SIZE}" role="img" aria-label="Drawing pad. Draw with your finger or mouse."></canvas><div class="pad-tools" role="group" aria-label="Drawing tools">${PAD_COLOURS.map(
+    ([c, name]) =>
+      `<button type="button" class="swatch ${pad.colour === c ? "active" : ""}" data-pad-colour="${c}" style="--swatch:${c}" aria-label="${name}" aria-pressed="${pad.colour === c}"></button>`,
+  ).join("")}<button type="button" class="pad-tool" data-pad-size aria-label="${pad.size > 6 ? "Use thin brush" : "Use thick brush"}">${pad.size > 6 ? "Thick" : "Thin"}</button><button type="button" class="pad-tool" data-pad="undo" aria-label="Undo last line">${icon("undo", 18)}</button><button type="button" class="pad-tool" data-pad="clear" aria-label="Clear drawing">${icon("trash", 18)}</button></div><p class="field-error pad-error" id="pad-error" role="alert" ${pad.error ? "" : "hidden"}>${esc(pad.error)}</p><button class="button primary full photo-button" type="button" data-pad="send" ${photoBusy ? "disabled" : ""}>${icon("check", 20)} ${photoBusy ? "Sending…" : "Send my drawing"}</button></div>`;
+}
+// Stable but scrambled order for anonymous voting, different each round.
+function hashed(text) {
+  let h = 0;
+  for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  return h;
+}
+function anonymousOrder(ids) {
+  return [...ids].sort((a, b) => hashed(room.question.id + a) - hashed(room.question.id + b));
+}
+function doodleScreen() {
+  const q = room.question,
+    featured = person(q.playerId),
+    shots = room.shotIds ?? [],
+    myShot = shots.includes(room.me);
+  if (pad.questionId !== q.id) resetPad(q.id);
+  const labels = {
+    drawing: "Get drawing",
+    judging: "Vote for the funniest",
+    reveal: "And the funniest drawing is…",
+  };
+  let count = "";
+  if (room.phase === "drawing")
+    count = `${icon("pencil", 19)} ${shots.length}/${room.players.length}`;
+  if (room.phase === "judging")
+    count = `${icon("users", 19)} ${(room.votedIds ?? []).length}/${judgeIds().length}`;
+  if (room.phase === "reveal")
+    count = `${icon("check", 19)} ${(room.nextReadyIds ?? []).length}/${room.players.length}`;
+  const prompt = `<h1 class="question-title doodle-prompt">${esc(q.title)}</h1>`;
+  let body = "";
+  if (room.phase === "drawing")
+    body = `${prompt}${
+      myShot && !pad.editing
+        ? `<div class="face-mine">${facePhoto(room.me, "Your drawing")}<div><p class="next-status">${icon("check", 17)} Drawing sent. You can change it until everyone’s done.</p><button class="button secondary full" type="button" data-pad="edit">${icon("pencil", 18)} Change my drawing</button></div></div>`
+        : `<p class="phase-message center">Everyone draws this, ${q.playerId === room.me ? "you included" : `${esc(featured.name)} included`}. It doesn’t have to be good. It has to be funny.</p>${padMarkup()}`
+    }${waitingChips(room.players.map((p) => p.id).filter((id) => !shots.includes(id)), "STILL DRAWING")}`;
+  if (room.phase === "judging") {
+    const canJudge = judgeIds().includes(room.me),
+      order = anonymousOrder(shots);
+    body = `${prompt}<p class="phase-message center">${canJudge ? "Names are hidden until the results. Tap the funniest drawing. You can change your vote until everyone’s in." : "There’s nothing for you to vote on this round."}</p><div class="face-grid">${order
+      .map((id, i) => {
+        const own = id === room.me,
+          chosen = room.myVote === id,
+          label = own ? "Your drawing" : `Drawing ${i + 1}`;
+        return `<div class="face-choice ${chosen ? "chosen" : ""}">${facePhoto(id, label, "doodle")}${
+          own
+            ? `<span class="face-own">${icon("lock", 15)} Your drawing</span>`
+            : canJudge
+              ? `<button class="button ${chosen ? "primary" : "secondary"} full" type="button" data-face-vote="${id}" aria-pressed="${chosen}">${chosen ? icon("check", 16) + " Your vote" : `Vote for drawing ${i + 1}`}</button>`
+              : ""
+        }</div>`;
+      })
+      .join("")}</div>${
+      room.deadline
+        ? `<div class="waiting-panel done">${icon("check", 18)}<strong>Everyone has voted. Revealing…</strong></div>`
+        : waitingChips(judgeIds().filter((id) => !(room.votedIds ?? []).includes(id)), "STILL DECIDING")
+    }`;
+  }
+  if (room.phase === "reveal") {
+    const result = room.result,
+      entries = [...result.copies].sort((a, b) => (result.tally[b] ?? 0) - (result.tally[a] ?? 0)),
+      top = Math.max(0, ...entries.map((id) => result.tally[id] ?? 0)),
+      winners = entries.filter((id) => top && (result.tally[id] ?? 0) === top);
+    body = `${prompt}<p class="face-headline">${
+      !entries.length
+        ? "Nobody sent a drawing this time."
+        : winners.length
+          ? `${icon("crown", 20)} Funniest drawing: <strong>${esc(winners.map((id) => person(id)?.name).join(" & "))}</strong>`
+          : "No votes this round."
+    }</p><div class="face-grid">${entries
+      .map((id) => {
+        const votes = result.tally[id] ?? 0;
+        return facePhoto(
+          id,
+          `${esc(person(id)?.name ?? "Player")}${id === room.me ? " (you)" : ""} · ${votes} ${votes === 1 ? "vote" : "votes"} · <b>+${votes * 2}</b>`,
+          `doodle ${votes && votes === top ? "winner" : ""}`,
+        );
+      })
+      .join("")}</div><p class="muted face-rule">Each vote for your drawing: +2</p>${nextPanel()}`;
+  }
+  return `${header()}<main id="main" class="question-stage pulse">${demoNote()}<div class="status-banner"><div><span class="eyebrow" style="margin:0 0 5px">ROUND ${q.number} OF ${q.total} · DOODLE OFF</span><strong>${esc(labels[room.phase] ?? "")}</strong></div>${count ? `<span class="timer vote-count">${count}</span>` : ""}</div>${room.pausedRemaining !== null ? '<div class="note warning">Game paused. Take a breath. The host will resume when everyone is ready.</div>' : ""}${profileCard()}<section class="question-card face-card"><div class="question-topline"><div class="subject">${avatar(featured)}<div class="subject-details"><strong>${esc(featured.name)}${q.playerId === room.me ? " (you)" : ""}</strong><small>Starring in this drawing.</small></div></div><span class="pill purple">${icon("pencil", 14)} Doodle off</span></div>${body}${controls()}</section><div class="mini-scoreboard">${[
+    ...room.players,
+  ]
+    .sort((a, b) => b.score - a.score)
+    .map((p) => {
+      const delta = roundPoints(p.id);
+      return `<span>${esc(p.name)}<b>${p.score}</b>${delta ? `<i class="delta up">+${delta}</i>` : ""}</span>`;
+    })
+    .join("")}</div></main>${footer()}`;
+}
 function faceScreen() {
   const q = room.question,
     poser = person(q.playerId),
@@ -563,6 +784,7 @@ function faceScreen() {
 }
 function questionScreen() {
   if (room.question?.type === "face") return faceScreen();
+  if (room.question?.type === "doodle") return doodleScreen();
   const q = room.question,
     subject = person(q.playerId),
     mine = q.playerId === room.me,
@@ -609,7 +831,7 @@ function historyFace(q, r) {
   const tally = r?.tally ?? {},
     top = Math.max(0, ...Object.values(tally)),
     best = Object.keys(tally).filter((id) => top && tally[id] === top);
-  return `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · Face off</p><strong>${best.length ? "Best copy: " + esc(best.map((id) => person(id)?.name).join(" & ")) : "No winning copy"}</strong><small>${r?.copies?.length ?? 0} copies · ${top} ${top === 1 ? "vote" : "votes"} for the best</small></div>`;
+  return `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · ${q.type === "doodle" ? esc(q.title) : "Face off"}</p><strong>${best.length ? (q.type === "doodle" ? "Funniest drawing: " : "Best copy: ") + esc(best.map((id) => person(id)?.name).join(" & ")) : "No winning copy"}</strong><small>${r?.copies?.length ?? 0} copies · ${top} ${top === 1 ? "vote" : "votes"} for the best</small></div>`;
 }
 function finished() {
   const players = [...room.players].sort(
@@ -621,7 +843,7 @@ function finished() {
     bluffers = players.filter((p) => p.fooled === bluffMax),
     correctMax = Math.max(...players.map((p) => p.correct)),
     detectives = players.filter((p) => p.correct === correctMax);
-  return `${header()}<main id="main" class="finished pulse">${demoNote()}<div class="trophy" aria-hidden="true">${icon("trophy", 65)}</div><span class="eyebrow">THE TRUTH HAS SPOKEN.</span><h1>${winners.length > 1 ? "A suspicious tie." : esc(winners[0].name) + " takes it."}</h1><p>${winners.length > 1 ? esc(winners.map((p) => p.name).join(" & ")) + " share the win." : "Good instincts. Excellent company. A few questionable life choices."}</p><div class="victory-share"><button class="button primary" type="button" id="share-victory">${icon("sparkles", 18)} ${winners.some((p) => p.id === room.me) ? "Share your victory" : "Share your result"}</button></div><section class="panel"><div class="panel-title"><h2>The final word</h2><span class="pill lime">${room.history.length} questions</span></div>${players.map((p, i) => `<div class="player-row"><span class="rank">${players.findIndex((x) => x.score === p.score) + 1}</span>${avatar(p)}<div class="player-name">${esc(p.name)}${p.id === room.me ? " <small>You</small>" : ""}</div><span class="points">${p.score}<small>pts</small></span></div>`).join("")}</section><div class="end-actions"><button class="button primary" data-action="replay">${icon("shuffle", 18)} Play again</button><button class="button secondary" data-leave>${icon("logout", 18)} ${room.demo ? "Exit demo" : "Exit room"}</button><p class="muted">Play again takes everyone back to the lobby with fresh questions.</p></div><div class="awards"><div class="award"><small>${icon("eye", 16)} MASTER BLUFFER</small><strong>${bluffMax ? esc(bluffers.map((p) => p.name).join(" & ")) : "Nobody got away with it"}</strong><p>${bluffMax ? bluffMax + (bluffMax === 1 ? " guess fooled." : " guesses fooled.") + " Very convincing." : "The group saw through every lie."}</p></div><div class="award"><small>${icon("sparkles", 16)} HUMAN LIE DETECTOR</small><strong>${correctMax ? esc(detectives.map((p) => p.name).join(" & ")) : "Next time, trust your gut"}</strong><p>${correctMax ? correctMax + (correctMax === 1 ? " truth spotted." : " truths spotted.") + " Impressive instincts." : "Those were some convincing decoys."}</p></div></div><details class="panel history"><summary>Relive the revelations</summary>${room.history.map(({ question: q, result: r }) => q.type === "face" ? historyFace(q, r) : `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · ${esc(q.title)}</p><strong>${esc(q.options.find((o) => o.id === r?.truthId)?.text)}</strong><small>The lie: ${esc(q.options.find((o) => o.id === r?.lieId)?.text)} · Fooled ${r?.bluffPoints ?? 0}</small></div>`).join("")}</details></main>${footer()}`;
+  return `${header()}<main id="main" class="finished pulse">${demoNote()}<div class="trophy" aria-hidden="true">${icon("trophy", 65)}</div><span class="eyebrow">THE TRUTH HAS SPOKEN.</span><h1>${winners.length > 1 ? "A suspicious tie." : esc(winners[0].name) + " takes it."}</h1><p>${winners.length > 1 ? esc(winners.map((p) => p.name).join(" & ")) + " share the win." : "Good instincts. Excellent company. A few questionable life choices."}</p><div class="victory-share"><button class="button primary" type="button" id="share-victory">${icon("sparkles", 18)} ${winners.some((p) => p.id === room.me) ? "Share your victory" : "Share your result"}</button></div><section class="panel"><div class="panel-title"><h2>The final word</h2><span class="pill lime">${room.history.length} questions</span></div>${players.map((p, i) => `<div class="player-row"><span class="rank">${players.findIndex((x) => x.score === p.score) + 1}</span>${avatar(p)}<div class="player-name">${esc(p.name)}${p.id === room.me ? " <small>You</small>" : ""}</div><span class="points">${p.score}<small>pts</small></span></div>`).join("")}</section><div class="end-actions"><button class="button primary" data-action="replay">${icon("shuffle", 18)} Play again</button><button class="button secondary" data-leave>${icon("logout", 18)} ${room.demo ? "Exit demo" : "Exit room"}</button><p class="muted">Play again takes everyone back to the lobby with fresh questions.</p></div><div class="awards"><div class="award"><small>${icon("eye", 16)} MASTER BLUFFER</small><strong>${bluffMax ? esc(bluffers.map((p) => p.name).join(" & ")) : "Nobody got away with it"}</strong><p>${bluffMax ? bluffMax + (bluffMax === 1 ? " guess fooled." : " guesses fooled.") + " Very convincing." : "The group saw through every lie."}</p></div><div class="award"><small>${icon("sparkles", 16)} HUMAN LIE DETECTOR</small><strong>${correctMax ? esc(detectives.map((p) => p.name).join(" & ")) : "Next time, trust your gut"}</strong><p>${correctMax ? correctMax + (correctMax === 1 ? " truth spotted." : " truths spotted.") + " Impressive instincts." : "Those were some convincing decoys."}</p></div></div><details class="panel history"><summary>Relive the revelations</summary>${room.history.map(({ question: q, result: r }) => ["face", "doodle"].includes(q.type) ? historyFace(q, r) : `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · ${esc(q.title)}</p><strong>${esc(q.options.find((o) => o.id === r?.truthId)?.text)}</strong><small>The lie: ${esc(q.options.find((o) => o.id === r?.lieId)?.text)} · Fooled ${r?.bluffPoints ?? 0}</small></div>`).join("")}</details></main>${footer()}`;
 }
 function render(force = false) {
   const focused = document.activeElement?.matches("textarea")
@@ -656,6 +878,8 @@ function render(force = false) {
       })
     : "home";
   if (!force && sig === signature) return;
+  // Never redraw the screen under a finger that's mid-stroke; the next update catches up.
+  if (!force && penDown) return;
   if (
     !force &&
     room?.phase === "writing" &&
@@ -684,6 +908,7 @@ function render(force = false) {
     }
   }
   updateTimer();
+  mountPad();
   if (room?.phase === "finished" && old && old !== "finished" && old !== "lobby")
     celebrate();
   if (room && old && old !== room.phase) {
@@ -759,7 +984,7 @@ function accept(data) {
       storage.remove(draftKey());
     }
     room = data.room;
-    if (room.question?.type === "face") loadPhotos();
+    if (["face", "doodle"].includes(room.question?.type)) loadPhotos();
     if (room.phase !== "lobby" && room.prompts.length) {
       const previous = storage.get("bt-prompt-history") ?? {};
       const ids = room.prompts.map((p) => p.id);
@@ -1270,6 +1495,33 @@ document.addEventListener("click", async (e) => {
   else if (t.matches("[data-action]")) send(t.dataset.action).catch(() => {});
   else if (t.matches("[data-swap]")) swapPrompt(t.dataset.swap);
   else if (t.matches("[data-take-photo]")) $("#photo-input")?.click();
+  else if (t.matches("[data-pad-colour]")) {
+    // Tool changes update in place: no full redraw, so no flicker while drawing.
+    pad.colour = t.dataset.padColour;
+    document.querySelectorAll("[data-pad-colour]").forEach((b) => {
+      const on = b.dataset.padColour === pad.colour;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", on);
+    });
+  } else if (t.matches("[data-pad-size]")) {
+    pad.size = pad.size > 6 ? 6 : 14;
+    t.textContent = pad.size > 6 ? "Thick" : "Thin";
+    t.setAttribute("aria-label", pad.size > 6 ? "Use thin brush" : "Use thick brush");
+  } else if (t.matches("[data-pad]")) {
+    const step = t.dataset.pad,
+      canvas = $("#doodle-pad");
+    if (step === "undo") pad.strokes.pop();
+    if (step === "clear") pad.strokes = [];
+    if (step === "undo" || step === "clear") {
+      savePad();
+      if (canvas) drawStrokes(canvas.getContext("2d"));
+    }
+    if (step === "edit") {
+      pad.editing = true;
+      render(true);
+    }
+    if (step === "send") sendDrawing();
+  }
   else if (t.matches("[data-face-vote]"))
     send("face-vote", {
       playerId: t.dataset.faceVote,

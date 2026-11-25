@@ -12,7 +12,26 @@ export const PHASES = ["voting", "reveal", "story"];
 // and +1 if at least one person voted and nobody spotted their truth.
 export const POINTS = { truth: 2, fooled: 1, stumped: 1, faceVote: 2 };
 // Game types: truth-and-lie questions, face-off photo rounds, or a mix of both.
-export const MODES = ["classic", "faces", "mixed"];
+export const MODES = ["classic", "faces", "doodles", "mixed"];
+// Doodle prompts: always about one player in the room, always kind enough for any age.
+export const DOODLE_PROMPTS = [
+  "Draw {name} as a superhero",
+  "Draw {name} at 7 o’clock in the morning",
+  "Draw {name} as a vegetable",
+  "Draw {name}’s face when the Wi-Fi goes down",
+  "Draw {name} as a cat",
+  "Draw {name} winning a prize for something silly",
+  "Draw {name} dancing like nobody’s watching",
+  "Draw {name}’s secret talent",
+  "Draw {name} as a movie villain",
+  "Draw {name} meeting a dinosaur",
+  "Draw {name}’s dream pet",
+  "Draw {name} on their dream holiday",
+  "Draw {name} as a famous painting",
+  "Draw {name} trying to cook dinner",
+  "Draw {name} as a pirate",
+  "Draw {name} after eating too much cake",
+];
 // Photos are small JPEG data URLs, resized on the phone before upload.
 export const MAX_PHOTO_LENGTH = 60000;
 export const DEFAULT_SETTINGS = {
@@ -235,17 +254,32 @@ function buildQuestion(p, answer) {
   };
 }
 const modeOf = (room) => room.settings.mode ?? "classic";
-const hasFaces = (room) => modeOf(room) !== "classic";
+const hasChild = (room) => room.players.some((p) => p.ageGroup === "child");
 // A face-off round: one player pulls a face, everyone else copies it, the room votes on the best copy.
 function faceQuestion(p) {
   return { id: id(), type: "face", playerId: p.id, title: `Copy ${p.name}’s face` };
 }
+// A doodle round: everyone draws the same prompt about one player; the room votes for the funniest.
+function doodleQuestion(p, used = new Set()) {
+  const fresh = DOODLE_PROMPTS.filter((t) => !used.has(t)),
+    template = shuffle(fresh.length ? fresh : DOODLE_PROMPTS)[0];
+  used.add(template);
+  return {
+    id: id(),
+    type: "doodle",
+    playerId: p.id,
+    title: template.replace("{name}", p.name),
+  };
+}
+const isPhotoRound = (q) => ["face", "doodle"].includes(q?.type);
 function startQuestions(room, now) {
   const mode = modeOf(room);
   room.queue = [];
-  if (mode === "faces") {
+  const used = new Set();
+  if (mode === "faces" || mode === "doodles") {
     for (let round = 0; round < room.settings.questionsPerPlayer; round++)
-      for (const p of room.players) room.queue.push(faceQuestion(p));
+      for (const p of room.players)
+        room.queue.push(mode === "faces" ? faceQuestion(p) : doodleQuestion(p, used));
   } else {
     const count = Math.min(
       room.settings.questionsPerPlayer,
@@ -261,11 +295,14 @@ function startQuestions(room, now) {
     for (let round = 0; round < count; round++)
       room.players.forEach((p, i) => {
         room.queue.push(buildQuestion(p, answerOrder.get(p.id)[round]));
-        // Mixed: follow each truth question with the next player's face-off, so nobody poses twice in a row.
-        if (mode === "mixed" && round === 0)
+        // Mixed: follow each truth question with the next player's face-off or doodle (alternating),
+        // so nobody is featured twice in a row. Rooms with an under-13 player get doodles only.
+        if (mode === "mixed" && round === 0) {
+          const next = room.players[(i + 1) % room.players.length];
           room.queue.push(
-            faceQuestion(room.players[(i + 1) % room.players.length]),
+            i % 2 === 0 && !hasChild(room) ? faceQuestion(next) : doodleQuestion(next, used),
           );
+        }
       });
   }
   room.questionIndex = 0;
@@ -276,18 +313,27 @@ function openQuestion(room, now) {
   room.votes = {};
   room.shots = {};
   const q = room.queue[room.questionIndex];
-  enter(room, q?.type === "face" ? "posing" : "voting", now);
+  enter(
+    room,
+    q?.type === "face" ? "posing" : q?.type === "doodle" ? "drawing" : "voting",
+    now,
+  );
 }
 function copiersFor(room) {
   const q = room.queue[room.questionIndex];
   return room.players.filter((p) => p.id !== q.playerId);
 }
-// Anyone with at least one copy that isn't their own can judge.
-function judgesFor(room) {
-  const copies = Object.keys(room.shots).filter(
-    (id) => id !== room.queue[room.questionIndex].playerId,
+// The entries people vote on: copies in a face-off (not the original), every drawing in a doodle round.
+function entriesFor(room) {
+  const q = room.queue[room.questionIndex];
+  return Object.keys(room.shots).filter(
+    (id) => q.type === "doodle" || id !== q.playerId,
   );
-  return room.players.filter((p) => copies.some((id) => id !== p.id));
+}
+// Anyone with at least one entry that isn't their own can judge.
+function judgesFor(room) {
+  const entries = entriesFor(room);
+  return room.players.filter((p) => entries.some((id) => id !== p.id));
 }
 function openJudging(room, now) {
   room.votes = {};
@@ -308,10 +354,10 @@ function scoreFace(room, now) {
   }
   room.results.push({
     questionId: q.id,
-    type: "face",
+    type: q.type,
     votes,
     tally,
-    copies: Object.keys(room.shots).filter((id) => id !== q.playerId),
+    copies: entriesFor(room),
   });
   enter(room, "reveal", now);
 }
@@ -419,7 +465,7 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
           fail(MODES.includes(value), "Choose a game type.");
           fail(
             value === "classic" || !room.demo,
-            "Face off needs real cameras. Try it with friends.",
+            "The demo players can’t take photos or draw. Try these rounds with friends.",
           );
           room.settings.mode = value;
           continue;
@@ -467,17 +513,21 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
         room.players.every((p) => p.ageGroup !== null),
         "Everyone needs to choose their age group in the room before starting.",
       );
-      if (hasFaces(room)) {
-        fail(!room.demo, "Face off needs real cameras. Try it with friends.");
+      if (modeOf(room) !== "classic")
         fail(
-          !room.players.some((p) => p.ageGroup === "child"),
-          "Face off is switched off when a player is under 13. Choose Truth & lies.",
+          !room.demo,
+          "The demo players can’t take photos or draw. Try these rounds with friends.",
         );
-      }
+      // Face-off photos are off for under-13s; Doodle off and Mixed (doodles only) are fine.
+      if (modeOf(room) === "faces")
+        fail(
+          !hasChild(room),
+          "Face off is switched off when a player is under 13. Try Doodle off instead.",
+        );
       room.promptPack = promptPackForRoom(room);
       if (room.demo) configureDemo(room);
       room.locked = true;
-      if (room.settings.mode === "faces") startQuestions(room, now);
+      if (["faces", "doodles"].includes(room.settings.mode)) startQuestions(room, now);
       else enter(room, "writing", now);
       break;
     case "answers": {
@@ -573,6 +623,7 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
           "voting",
           "posing",
           "copying",
+          "drawing",
           "judging",
           "reveal",
           "story",
@@ -581,14 +632,18 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       );
       if (room.phase === "voting") score(room, now);
       else if (room.phase === "posing") nextQuestion(room, now);
-      else if (room.phase === "copying") openJudging(room, now);
+      else if (room.phase === "copying" || room.phase === "drawing")
+        openJudging(room, now);
       else if (room.phase === "judging") scoreFace(room, now);
       else if (room.phase === "reading") enter(room, "discussion", now);
       else if (room.phase === "discussion") enter(room, "voting", now);
       else nextQuestion(room, now);
       break;
     case "photo": {
-      fail(["posing", "copying"].includes(room.phase), "Photos are closed for this round.");
+      fail(
+        ["posing", "copying", "drawing"].includes(room.phase),
+        "This round isn’t taking pictures right now.",
+      );
       active();
       const q = room.queue[room.questionIndex];
       fail(data.questionId === q.id, "That photo belongs to a previous round. Refresh and try again.");
@@ -596,9 +651,13 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       fail(
         /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(image) &&
           image.length <= MAX_PHOTO_LENGTH,
-        "That photo didn’t come through. Try taking it again.",
+        "That picture didn’t come through. Try again.",
       );
-      if (room.phase === "posing") {
+      if (room.phase === "drawing") {
+        // Everyone draws, including the player the prompt is about. Redraws replace the old one.
+        room.shots[me.id] = image;
+        if (room.players.every((p) => room.shots[p.id])) openJudging(room, now);
+      } else if (room.phase === "posing") {
         fail(me.id === q.playerId, "Wait for the face to copy.");
         room.shots[me.id] = image;
         enter(room, "copying", now);
@@ -616,8 +675,8 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       fail(data.questionId === q.id, "That vote belongs to a previous round. Refresh and try again.");
       fail(data.playerId !== me.id, "You can’t vote for your own photo.");
       fail(
-        data.playerId !== q.playerId && room.shots[data.playerId],
-        "Choose one of the copies.",
+        entriesFor(room).includes(data.playerId),
+        "Choose one of the entries.",
       );
       room.votes[me.id] = data.playerId;
       closeIfEveryoneVoted(room, now);
@@ -795,10 +854,12 @@ export function photosFor(room, token, now = Date.now()) {
   const me = authorize(room, token, now),
     q = room.queue[room.questionIndex],
     shots = room.shots ?? {};
-  if (q?.type !== "face") return { questionId: null, photos: {} };
+  if (!isPhotoRound(q)) return { questionId: null, photos: {} };
   const visible =
     room.phase === "copying"
       ? [q.playerId, me.id]
+      : room.phase === "drawing"
+        ? [me.id]
       : ["judging", "reveal"].includes(room.phase)
         ? Object.keys(shots)
         : [];
