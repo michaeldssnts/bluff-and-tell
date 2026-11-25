@@ -7,6 +7,7 @@ import {
   apply,
   tick,
   snapshot,
+  photosFor,
   GameError,
 } from "./engine.mjs";
 export const SECURITY_HEADERS = {
@@ -20,7 +21,8 @@ export async function api(
   store,
 ) {
   try {
-    if (body.length > 16000)
+    // Room for one resized photo (about 60 KB); everything else is far smaller.
+    if (body.length > 64000)
       throw new GameError("That submission is too large.", 413);
     let data = {};
     if (body) {
@@ -46,6 +48,7 @@ export async function api(
           Boolean(data.demo),
           Date.now(),
           data.ageGroup === undefined ? null : validateAgeGroup(data.ageGroup),
+          data.recentPromptIds,
         );
         if (await store.create(room))
           return { status: 201, data: { token, room: snapshot(room, token) } };
@@ -53,7 +56,7 @@ export async function api(
       throw new GameError("Could not create a room. Please try again.", 503);
     }
     const match = path.match(
-      /^\/api\/rooms\/([A-Z2-9]{6})(?:\/(join|action))?$/,
+      /^\/api\/rooms\/([A-Z2-9]{6})(?:\/(join|action|photos))?$/,
     );
     if (!match) throw new GameError("Not found.", 404);
     const [, code, operation] = match;
@@ -69,12 +72,18 @@ export async function api(
             data.ageGroup === undefined
               ? null
               : validateAgeGroup(data.ageGroup),
+            data.recentPromptIds,
           );
           room.version++;
           return { token, room: snapshot(room, token) };
         }),
       };
     }
+    if (operation === "photos" && method === "GET")
+      return {
+        status: 200,
+        data: await store.mutate(code, (room) => photosFor(room, token)),
+      };
     if (!operation && method === "GET")
       return {
         status: 200,

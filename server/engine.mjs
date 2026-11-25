@@ -1,20 +1,46 @@
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import {
   PROMPTS,
-  DEMO_ANSWERS,
   AGE_GROUPS,
   promptsForPlayer,
   promptPackForRoom,
-  SILLY_DEMO_ANSWERS,
+  normalisePromptHistory,
 } from "./prompts.mjs";
 
-export const PHASES = ["reading", "discussion", "voting", "reveal", "story"];
+export const PHASES = ["voting", "reveal", "story"];
+// Scoring: spot the truth +2; the featured player gets +1 per friend fooled by their lie,
+// and +1 if at least one person voted and nobody spotted their truth.
+export const POINTS = { truth: 2, fooled: 1, stumped: 1, faceVote: 2 };
+// Game types: truth-and-lie questions, face-off photo rounds, or a mix of both.
+export const MODES = ["classic", "faces", "doodles", "mixed"];
+// Doodle prompts: always about one player in the room, always kind enough for any age.
+export const DOODLE_PROMPTS = [
+  "Draw {name} as a superhero",
+  "Draw {name} at 7 o’clock in the morning",
+  "Draw {name} as a vegetable",
+  "Draw {name}’s face when the Wi-Fi goes down",
+  "Draw {name} as a cat",
+  "Draw {name} winning a prize for something silly",
+  "Draw {name} dancing like nobody’s watching",
+  "Draw {name}’s secret talent",
+  "Draw {name} as a movie villain",
+  "Draw {name} meeting a dinosaur",
+  "Draw {name}’s dream pet",
+  "Draw {name} on their dream holiday",
+  "Draw {name} as a famous painting",
+  "Draw {name} trying to cook dinner",
+  "Draw {name} as a pirate",
+  "Draw {name} after eating too much cake",
+];
+// Photos are small JPEG data URLs, resized on the phone before upload.
+export const MAX_PHOTO_LENGTH = 60000;
 export const DEFAULT_SETTINGS = {
+  mode: "classic",
   questionsPerPlayer: 1,
-  writing: 360,
+  writing: 180,
   reading: 10,
   discussion: 45,
-  voting: 30,
+  voting: 45,
   reveal: 30,
   story: 60,
 };
@@ -73,14 +99,17 @@ export function newRoom(
   demo = false,
   now = Date.now(),
   ageGroup = "adult",
+  recentPromptIds = [],
 ) {
   const host = player(name, false, ageGroup);
+  host.promptHistory = normalisePromptHistory(recentPromptIds);
   const room = {
     code: Array.from(
       { length: 6 },
       () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[randomInt(32)],
     ).join(""),
     version: 0,
+    promptSeed: id(),
     createdAt: now,
     expiresAt: now + 24 * 3600000,
     hostId: host.id,
@@ -100,10 +129,10 @@ export function newRoom(
   if (demo) {
     room.settings = {
       questionsPerPlayer: 1,
-      writing: 360,
+      writing: 180,
       reading: 5,
       discussion: 8,
-      voting: 20,
+      voting: 30,
       reveal: 12,
       story: 20,
     };
@@ -120,19 +149,15 @@ function configureDemo(room) {
     .filter((p) => p.bot)
     .forEach((p) => {
       p.ageGroup = host?.ageGroup === "adult26" ? "adult26" : "adult";
+      p.promptHistory ??= [...(host?.promptHistory ?? [])];
     });
-  const answers =
-    promptPackForRoom(room) === "extra-silly"
-      ? SILLY_DEMO_ANSWERS
-      : DEMO_ANSWERS;
   room.players
     .filter((p) => p.bot)
-    .forEach((p, n) => {
-      p.answers = promptsForPlayer(p, room).map((prompt, i) => ({
-        promptId: prompt.id,
-        truth: answers[n][i * 2],
-        lie: answers[n][i * 2 + 1],
-      }));
+    .forEach((p) => {
+      p.answers = promptsForPlayer(p, room).map((prompt) => {
+        const [truth, lie] = shuffle([...prompt.decoys, ...prompt.wildcards]);
+        return { promptId: prompt.id, truth, lie };
+      });
       p.submitted = true;
     });
 }
@@ -146,7 +171,13 @@ export function authorize(room, token, now = Date.now()) {
   fail(p, "Your session is no longer in this room. Please join again.", 401);
   return p;
 }
-export function joinRoom(room, name, now = Date.now(), ageGroup = "adult") {
+export function joinRoom(
+  room,
+  name,
+  now = Date.now(),
+  ageGroup = "adult",
+  recentPromptIds = [],
+) {
   fail(room.expiresAt > now, "This room has expired.", 404);
   fail(
     room.phase === "lobby" && !room.locked,
@@ -154,6 +185,7 @@ export function joinRoom(room, name, now = Date.now(), ageGroup = "adult") {
   );
   fail(room.players.length < 8, "This room is full (8 players).");
   const p = player(name, false, ageGroup);
+  p.promptHistory = normalisePromptHistory(recentPromptIds);
   fail(
     !room.players.some((x) => key(x.name) === key(p.name)),
     "That nickname is already taken. Try another.",
@@ -163,11 +195,36 @@ export function joinRoom(room, name, now = Date.now(), ageGroup = "adult") {
 }
 function enter(room, phase, now) {
   room.phase = phase;
-  room.deadline =
-    phase === "finished" || phase === "lobby"
-      ? null
-      : now + room.settings[phase] * 1000;
+  // No timers in a new game: writing ends when everyone is ready, voting when everyone
+  // has voted, and the reveal when everyone taps Next. Older rooms mid-way through
+  // a reading, discussion or story phase still finish on their timer.
+  room.deadline = ["reading", "discussion", "story"].includes(phase)
+    ? now + room.settings[phase] * 1000
+    : null;
   room.pausedRemaining = null;
+  room.nextReady = {};
+}
+// At the reveal, each player taps Next; the room moves on once everyone has.
+function moveOnIfEveryoneReady(room, now) {
+  if (room.phase !== "reveal" || room.pausedRemaining !== null) return;
+  if (room.players.every((p) => room.nextReady?.[p.id])) nextQuestion(room, now);
+}
+// Everyone except the player the question is about.
+function votersFor(room) {
+  const q = room.queue[room.questionIndex];
+  return room.players.filter((p) => p.id !== q.playerId);
+}
+// Once every voter has picked, reveal after a short grace so the last voter can still switch.
+function closeIfEveryoneVoted(room, now) {
+  if (room.pausedRemaining !== null) return;
+  const voters =
+    room.phase === "voting"
+      ? votersFor(room)
+      : room.phase === "judging"
+        ? judgesFor(room)
+        : null;
+  if (voters?.every((p) => room.votes[p.id]))
+    room.deadline = Math.min(room.deadline ?? Infinity, now + 3000);
 }
 function makeDecoys(answer, previous = []) {
   const prompt = PROMPTS.find((p) => p.id === answer.promptId);
@@ -196,22 +253,113 @@ function buildQuestion(p, answer) {
     ]).map((x) => ({ ...x, id: id() })),
   };
 }
+const modeOf = (room) => room.settings.mode ?? "classic";
+const hasChild = (room) => room.players.some((p) => p.ageGroup === "child");
+// A face-off round: one player pulls a face, everyone else copies it, the room votes on the best copy.
+function faceQuestion(p) {
+  return { id: id(), type: "face", playerId: p.id, title: `Copy ${p.name}’s face` };
+}
+// A doodle round: everyone draws the same prompt about one player; the room votes for the funniest.
+function doodleQuestion(p, used = new Set()) {
+  const fresh = DOODLE_PROMPTS.filter((t) => !used.has(t)),
+    template = shuffle(fresh.length ? fresh : DOODLE_PROMPTS)[0];
+  used.add(template);
+  return {
+    id: id(),
+    type: "doodle",
+    playerId: p.id,
+    title: template.replace("{name}", p.name),
+  };
+}
+const isPhotoRound = (q) => ["face", "doodle"].includes(q?.type);
 function startQuestions(room, now) {
-  const count = Math.min(
-    room.settings.questionsPerPlayer,
-    ...room.players.map((p) => p.answers.length),
-  );
-  fail(
-    count >= 1,
-    "Everyone needs at least one complete truth and lie before the game can start. Add more writing time.",
-  );
+  const mode = modeOf(room);
   room.queue = [];
-  for (let round = 0; round < count; round++)
-    for (const p of room.players)
-      room.queue.push(buildQuestion(p, p.answers[round]));
+  const used = new Set();
+  if (mode === "faces" || mode === "doodles") {
+    for (let round = 0; round < room.settings.questionsPerPlayer; round++)
+      for (const p of room.players)
+        room.queue.push(mode === "faces" ? faceQuestion(p) : doodleQuestion(p, used));
+  } else {
+    const count = Math.min(
+      room.settings.questionsPerPlayer,
+      ...room.players.map((p) => p.answers.length),
+    );
+    fail(
+      count >= 1,
+      "Everyone needs at least one complete truth and lie before the game can start.",
+    );
+    const answerOrder = new Map(
+      room.players.map((p) => [p.id, shuffle(p.answers)]),
+    );
+    for (let round = 0; round < count; round++)
+      room.players.forEach((p, i) => {
+        room.queue.push(buildQuestion(p, answerOrder.get(p.id)[round]));
+        // Mixed: follow each truth question with the next player's face-off or doodle (alternating),
+        // so nobody is featured twice in a row. Rooms with an under-13 player get doodles only.
+        if (mode === "mixed" && round === 0) {
+          const next = room.players[(i + 1) % room.players.length];
+          room.queue.push(
+            i % 2 === 0 && !hasChild(room) ? faceQuestion(next) : doodleQuestion(next, used),
+          );
+        }
+      });
+  }
   room.questionIndex = 0;
+  openQuestion(room, now);
+}
+// Truth questions open straight into voting; face-offs start with the poser taking their photo.
+function openQuestion(room, now) {
   room.votes = {};
-  enter(room, "reading", now);
+  room.shots = {};
+  const q = room.queue[room.questionIndex];
+  enter(
+    room,
+    q?.type === "face" ? "posing" : q?.type === "doodle" ? "drawing" : "voting",
+    now,
+  );
+}
+function copiersFor(room) {
+  const q = room.queue[room.questionIndex];
+  return room.players.filter((p) => p.id !== q.playerId);
+}
+// The entries people vote on: copies in a face-off (not the original), every drawing in a doodle round.
+function entriesFor(room) {
+  const q = room.queue[room.questionIndex];
+  return Object.keys(room.shots).filter(
+    (id) => q.type === "doodle" || id !== q.playerId,
+  );
+}
+// Anyone with at least one entry that isn't their own can judge.
+function judgesFor(room) {
+  const entries = entriesFor(room);
+  return room.players.filter((p) => entries.some((id) => id !== p.id));
+}
+function openJudging(room, now) {
+  room.votes = {};
+  if (judgesFor(room).length) enter(room, "judging", now);
+  else scoreFace(room, now);
+}
+function scoreFace(room, now) {
+  const q = room.queue[room.questionIndex];
+  if (room.results.some((r) => r.questionId === q.id)) return;
+  const tally = {};
+  const votes = Object.entries(room.votes).map(([playerId, photoOf]) => {
+    tally[photoOf] = (tally[photoOf] ?? 0) + 1;
+    return { playerId, photoOf };
+  });
+  for (const [playerId, count] of Object.entries(tally)) {
+    const p = room.players.find((x) => x.id === playerId);
+    if (p) p.score += count * POINTS.faceVote;
+  }
+  room.results.push({
+    questionId: q.id,
+    type: q.type,
+    votes,
+    tally,
+    copies: entriesFor(room),
+  });
+  enter(room, "reveal", now);
 }
 function score(room, now) {
   const q = room.queue[room.questionIndex];
@@ -223,42 +371,58 @@ function score(room, now) {
     const p = room.players.find((p) => p.id === playerId),
       correct = optionId === truth.id;
     if (correct) {
-      p.score += 2;
+      p.score += POINTS.truth;
       p.correct++;
     }
     if (optionId === lie.id) {
-      subject.score++;
+      subject.score += POINTS.fooled;
       subject.fooled++;
     }
-    return { playerId, optionId, points: correct ? 2 : 0 };
+    return { playerId, optionId, points: correct ? POINTS.truth : 0 };
   });
+  // Nobody spotted the truth: reward the featured player even if nobody fell for the lie itself.
+  const stumpBonus =
+    picks.length && !picks.some((p) => p.optionId === truth.id)
+      ? POINTS.stumped
+      : 0;
+  subject.score += stumpBonus;
   room.results.push({
     questionId: q.id,
     truthId: truth.id,
     lieId: lie.id,
     picks,
-    bluffPoints: picks.filter((p) => p.optionId === lie.id).length,
+    bluffPoints: picks.filter((p) => p.optionId === lie.id).length * POINTS.fooled,
+    stumpBonus,
   });
   enter(room, "reveal", now);
 }
 function nextQuestion(room, now) {
   room.questionIndex++;
+  room.nextReady = {};
   room.votes = {};
+  // Photos are only kept for the round they belong to.
+  room.shots = {};
   if (room.questionIndex >= room.queue.length) enter(room, "finished", now);
-  else enter(room, "reading", now);
+  else openQuestion(room, now);
 }
 export function tick(room, now = Date.now()) {
-  if (room.pausedRemaining !== null || !room.deadline) return;
+  if (room.pausedRemaining !== null) return;
   if (room.demo && room.phase === "voting") {
     const q = room.queue[room.questionIndex];
-    room.players
-      .filter((p) => p.bot && p.id !== q.playerId)
+    votersFor(room)
+      .filter((p) => p.bot)
       .forEach((p, i) => {
         if (!room.votes[p.id])
           room.votes[p.id] =
             q.options[(i + room.questionIndex) % q.options.length].id;
       });
+    closeIfEveryoneVoted(room, now);
   }
+  if (room.demo && room.phase === "reveal") {
+    room.nextReady ??= {};
+    room.players.filter((p) => p.bot).forEach((p) => (room.nextReady[p.id] = true));
+  }
+  if (!room.deadline) return;
   for (
     let safety = 0;
     safety < 200 && room.deadline && now >= room.deadline;
@@ -275,6 +439,7 @@ export function tick(room, now = Date.now()) {
     } else if (room.phase === "reading") enter(room, "discussion", at);
     else if (room.phase === "discussion") enter(room, "voting", at);
     else if (room.phase === "voting") score(room, at);
+    else if (room.phase === "judging") scoreFace(room, at);
     else if (room.phase === "reveal") enter(room, "story", at);
     else if (room.phase === "story") nextQuestion(room, at);
     else break;
@@ -296,6 +461,15 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
         "Settings are locked after the game starts.",
       );
       for (const [name, value] of Object.entries(data)) {
+        if (name === "mode") {
+          fail(MODES.includes(value), "Choose a game type.");
+          fail(
+            value === "classic" || !room.demo,
+            "The demo players can’t take photos or draw. Try these rounds with friends.",
+          );
+          room.settings.mode = value;
+          continue;
+        }
         fail(Object.hasOwn(DEFAULT_SETTINGS, name), "Unknown setting.");
         const n = Number(value);
         fail(Number.isInteger(n), "Choose a whole number.");
@@ -339,9 +513,22 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
         room.players.every((p) => p.ageGroup !== null),
         "Everyone needs to choose their age group in the room before starting.",
       );
+      if (modeOf(room) !== "classic")
+        fail(
+          !room.demo,
+          "The demo players can’t take photos or draw. Try these rounds with friends.",
+        );
+      // Face-off photos are off for under-13s; Doodle off and Mixed (doodles only) are fine.
+      if (modeOf(room) === "faces")
+        fail(
+          !hasChild(room),
+          "Face off is switched off when a player is under 13. Try Doodle off instead.",
+        );
       room.promptPack = promptPackForRoom(room);
+      if (room.demo) configureDemo(room);
       room.locked = true;
-      enter(room, "writing", now);
+      if (["faces", "doodles"].includes(room.settings.mode)) startQuestions(room, now);
+      else enter(room, "writing", now);
       break;
     case "answers": {
       fail(room.phase === "writing", "The writing phase is over.");
@@ -378,6 +565,11 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       });
       fail(me.answers.length > 0, "Add at least one complete pair.");
       me.submitted = Boolean(data.submitted);
+      // Start as soon as everyone has locked in their answers.
+      if (room.players.every((p) => p.submitted)) {
+        startQuestions(room, now);
+        room.needsAnswers = false;
+      }
       break;
     }
     case "reroll": {
@@ -418,26 +610,89 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
         "Choose an option from this question.",
       );
       room.votes[me.id] = data.optionId;
-      if (Object.keys(room.votes).length === room.players.length - 1)
-        room.deadline = Math.min(room.deadline, now + 3000);
+      closeIfEveryoneVoted(room, now);
       break;
     }
     case "next":
       host();
       active();
       fail(
-        ["reading", "discussion", "reveal", "story"].includes(room.phase),
+        [
+          "reading",
+          "discussion",
+          "voting",
+          "posing",
+          "copying",
+          "drawing",
+          "judging",
+          "reveal",
+          "story",
+        ].includes(room.phase),
         "Wait for this phase to finish.",
       );
-      if (room.phase === "reading") enter(room, "discussion", now);
+      if (room.phase === "voting") score(room, now);
+      else if (room.phase === "posing") nextQuestion(room, now);
+      else if (room.phase === "copying" || room.phase === "drawing")
+        openJudging(room, now);
+      else if (room.phase === "judging") scoreFace(room, now);
+      else if (room.phase === "reading") enter(room, "discussion", now);
       else if (room.phase === "discussion") enter(room, "voting", now);
-      else if (room.phase === "reveal") enter(room, "story", now);
       else nextQuestion(room, now);
+      break;
+    case "photo": {
+      fail(
+        ["posing", "copying", "drawing"].includes(room.phase),
+        "This round isn’t taking pictures right now.",
+      );
+      active();
+      const q = room.queue[room.questionIndex];
+      fail(data.questionId === q.id, "That photo belongs to a previous round. Refresh and try again.");
+      const image = String(data.image ?? "");
+      fail(
+        /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(image) &&
+          image.length <= MAX_PHOTO_LENGTH,
+        "That picture didn’t come through. Try again.",
+      );
+      if (room.phase === "drawing") {
+        // Everyone draws, including the player the prompt is about. Redraws replace the old one.
+        room.shots[me.id] = image;
+        if (room.players.every((p) => room.shots[p.id])) openJudging(room, now);
+      } else if (room.phase === "posing") {
+        fail(me.id === q.playerId, "Wait for the face to copy.");
+        room.shots[me.id] = image;
+        enter(room, "copying", now);
+      } else {
+        fail(me.id !== q.playerId, "You’ve already pulled the face. Now watch them copy it.");
+        room.shots[me.id] = image;
+        if (copiersFor(room).every((p) => room.shots[p.id])) openJudging(room, now);
+      }
+      break;
+    }
+    case "face-vote": {
+      fail(room.phase === "judging", "Judging is not open.");
+      active();
+      const q = room.queue[room.questionIndex];
+      fail(data.questionId === q.id, "That vote belongs to a previous round. Refresh and try again.");
+      fail(data.playerId !== me.id, "You can’t vote for your own photo.");
+      fail(
+        entriesFor(room).includes(data.playerId),
+        "Choose one of the entries.",
+      );
+      room.votes[me.id] = data.playerId;
+      closeIfEveryoneVoted(room, now);
+      break;
+    }
+    case "ready-next":
+      fail(room.phase === "reveal", "Wait for the results first.");
+      active();
+      room.nextReady ??= {};
+      room.nextReady[me.id] = true;
+      moveOnIfEveryoneReady(room, now);
       break;
     case "extend":
       host();
       fail(
-        room.phase !== "lobby" && room.phase !== "finished",
+        ["reading", "discussion", "story"].includes(room.phase),
         "No timer to extend.",
       );
       if (room.pausedRemaining !== null) room.pausedRemaining += 60000;
@@ -485,23 +740,29 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       break;
     }
     case "replay":
-      host();
+      // Anyone can call a rematch; it takes the whole room back to the lobby.
       fail(room.phase === "finished", "Finish this game first.");
       for (const p of room.players) {
+        p.promptHistory = normalisePromptHistory([
+          ...(p.promptHistory ?? []),
+          ...promptsForPlayer(p, room).map((prompt) => prompt.id),
+          ...room.queue.map((q) => q.promptId),
+        ]);
         p.score = 0;
         p.correct = 0;
         p.fooled = 0;
-        if (!p.bot) {
-          p.answers = [];
-          p.submitted = false;
-        }
+        p.answers = [];
+        p.submitted = false;
       }
       room.queue = [];
       room.results = [];
       room.votes = {};
+      room.shots = {};
       room.questionIndex = 0;
       room.locked = false;
       delete room.promptPack;
+      room.promptSeed = id();
+      if (room.demo) configureDemo(room);
       room.needsAnswers = false;
       enter(room, "lobby", now);
       break;
@@ -561,13 +822,21 @@ export function snapshot(room, token, now = Date.now()) {
             playerId: q.playerId,
             promptId: q.promptId,
             title: q.title,
-            options: q.options.map(({ id, text }) => ({ id, text })),
+            type: q.type ?? "truth",
+            options: (q.options ?? []).map(({ id, text }) => ({ id, text })),
             number: room.questionIndex + 1,
             total: room.queue.length,
           }
         : null,
-    myVote: room.votes[me.id] ?? null,
+    myVote: room.votes?.[me.id] ?? null,
     votedCount: Object.keys(room.votes).length,
+    votedIds: ["voting", "judging"].includes(room.phase)
+      ? Object.keys(room.votes)
+      : [],
+    // Who has a photo in this round (the photos themselves come from photosFor).
+    shotIds: Object.keys(room.shots ?? {}),
+    nextReadyIds:
+      room.phase === "reveal" ? Object.keys(room.nextReady ?? {}) : [],
     result,
     history:
       room.phase === "finished"
@@ -576,5 +845,28 @@ export function snapshot(room, token, now = Date.now()) {
             result: room.results.find((r) => r.questionId === q.id),
           }))
         : null,
+  };
+}
+
+// Photos a player may see right now: the face to copy and their own copy while copying,
+// everyone's once judging opens. Nothing before the poser has taken theirs.
+export function photosFor(room, token, now = Date.now()) {
+  const me = authorize(room, token, now),
+    q = room.queue[room.questionIndex],
+    shots = room.shots ?? {};
+  if (!isPhotoRound(q)) return { questionId: null, photos: {} };
+  const visible =
+    room.phase === "copying"
+      ? [q.playerId, me.id]
+      : room.phase === "drawing"
+        ? [me.id]
+      : ["judging", "reveal"].includes(room.phase)
+        ? Object.keys(shots)
+        : [];
+  return {
+    questionId: q.id,
+    photos: Object.fromEntries(
+      visible.filter((id) => shots[id]).map((id) => [id, shots[id]]),
+    ),
   };
 }

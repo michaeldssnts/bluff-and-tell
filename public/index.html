@@ -47,7 +47,8 @@
         </li>
         <li>
           <strong>Enjoy the reveal.</strong> Correct guesses earn 2 points.
-          Every person who picks your lie earns you 1 point.
+          Every person who picks your lie earns you 1 point, plus a
+          1-point bonus if nobody spots your truth.
         </li>
       </ol>
       <p class="muted">
@@ -137,6 +138,8 @@
         Rooms expire after 24 hours. Expired data is inaccessible immediately
         and removed from storage by the backend’s cleanup process. Your browser
         stores your room session and unfinished answers so you can reconnect.
+        It also remembers recent questions and sends their IDs when you create or
+        join a room to help reduce repeats. This history does not include your answers.
       </p>
       <p>
         No advertising or analytics trackers are enabled in this version. We do

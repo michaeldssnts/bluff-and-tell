@@ -1,0 +1,70 @@
+# Git first, then Cloudflare:
+# - Pull requests: run the checks and tests only.
+# - Push or merge to main: test, then deploy to staging and check the live site.
+# - Production: only when someone runs this workflow by hand from main and picks "production".
+name: Test and deploy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [staging, production]
+        default: staging
+
+permissions:
+  contents: read
+
+# Never run two deploys to the same place at once; let a running one finish.
+concurrency:
+  group: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Check and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+
+  deploy:
+    name: Deploy to ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    needs: test
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' &&
+        (inputs.environment == 'staging' || github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    env:
+      TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - name: Deploy with Wrangler
+        run: npx wrangler --config wrangler.jsonc deploy --env "$TARGET"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Check the live staging site
+        if: env.TARGET == 'staging'
+        # A new version can take a few seconds to settle, so wait and retry once.
+        run: |
+          sleep 15
+          node scripts/check-cloudflare.mjs https://bluff-and-tell-staging.bluff-and-tell.workers.dev \
+            || (sleep 20 && node scripts/check-cloudflare.mjs https://bluff-and-tell-staging.bluff-and-tell.workers.dev)

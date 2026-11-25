@@ -6,9 +6,20 @@ import {
   apply,
   tick,
   snapshot,
+  photosFor,
   GameError,
 } from "../server/engine.mjs";
+import {
+  PROMPTS,
+  promptPoolForPlayer,
+  promptsForPlayer,
+} from "../server/prompts.mjs";
 const at = 1800000000000;
+const firstPrompt = (room, token) => snapshot(room, token, at).prompts[0].id;
+// The game starts itself once everyone has locked in; the host only presses begin to start early.
+const begin = (room, token) => {
+  if (room.phase === "writing") apply(room, token, "begin", {}, at);
+};
 function group() {
   const { room, token } = newRoom("Mia", false, at);
   const b = joinRoom(room, "Tumi", at),
@@ -26,7 +37,7 @@ function prepared() {
       {
         answers: [
           {
-            promptId: "first-job",
+            promptId: firstPrompt(g.room, t),
             truth: "True job " + i,
             lie: "Fake job " + i,
           },
@@ -36,14 +47,23 @@ function prepared() {
       at,
     ),
   );
-  apply(g.room, g.tokens[0], "begin", {}, at);
+  begin(g.room, g.tokens[0]);
   return g;
 }
+// Voting and the reveal have no timer, so move past them the way a host would.
+function advance(room, hostToken) {
+  if (room.phase === "voting" || room.phase === "reveal")
+    apply(room, hostToken, "next", {}, at);
+  else tick(room, room.deadline);
+}
 function voting(g, index = 0) {
-  while (g.room.questionIndex < index || g.room.phase !== "voting") {
-    tick(g.room, g.room.deadline);
-  }
+  while (g.room.questionIndex < index || g.room.phase !== "voting")
+    advance(g.room, g.tokens[0]);
   return g;
+}
+function finish(room, hostToken) {
+  for (let i = 0; i < 100 && room.phase !== "finished"; i++)
+    advance(room, hostToken);
 }
 test("rooms have six-character codes and unguessable guest tokens", () => {
   const { room, token } = newRoom("Mia", false, at);
@@ -87,7 +107,13 @@ test("truth and lie must differ even with punctuation and casing changes", () =>
         g.tokens[0],
         "answers",
         {
-          answers: [{ promptId: "first-job", truth: "A Café!", lie: "a café" }],
+          answers: [
+            {
+              promptId: firstPrompt(g.room, g.tokens[0]),
+              truth: "A Café!",
+              lie: "a café",
+            },
+          ],
         },
         at,
       ),
@@ -107,24 +133,30 @@ test("cannot start questions while a player has no complete answer", () => {
     () => apply(g.room, g.tokens[0], "begin", {}, at),
     /Everyone needs/,
   );
-  tick(g.room, g.room.deadline);
-  assert.equal(g.room.phase, "writing");
+  // No writing timer: the room simply waits for answers.
   assert.equal(g.room.deadline, null);
-  assert.equal(g.room.needsAnswers, true);
+  tick(g.room, at + 3600000);
+  assert.equal(g.room.phase, "writing");
 });
 test("pause freezes deadlines, blocks votes, and resume preserves remaining time", () => {
   const g = voting(prepared()),
-    deadline = g.room.deadline;
-  apply(g.room, g.tokens[0], "pause", {}, deadline - 10000);
+    q = g.room.queue[0];
+  g.tokens.forEach((t, i) => {
+    if (g.room.players[i].id !== q.playerId)
+      apply(g.room, t, "vote", { questionId: q.id, optionId: q.options[0].id }, at);
+  });
+  const deadline = g.room.deadline;
+  assert.equal(deadline, at + 3000);
+  apply(g.room, g.tokens[0], "pause", {}, deadline - 1000);
   tick(g.room, deadline + 100000);
   assert.equal(g.room.phase, "voting");
-  assert.equal(g.room.pausedRemaining, 10000);
+  assert.equal(g.room.pausedRemaining, 1000);
   assert.throws(
     () => apply(g.room, g.tokens[1], "vote", {}, deadline),
     /paused/,
   );
   apply(g.room, g.tokens[0], "pause", {}, deadline + 100000);
-  assert.equal(g.room.deadline, deadline + 110000);
+  assert.equal(g.room.deadline, deadline + 101000);
 });
 test("featured players cannot vote; unknown and stale question options are rejected", () => {
   const g = voting(prepared()),
@@ -227,7 +259,9 @@ test("truth earns two points; only the authored lie earns bluff points, exactly 
 test("late votes are rejected and missing votes score zero", () => {
   const g = voting(prepared()),
     q = g.room.queue[0],
-    end = g.room.deadline;
+    end = at + 1000;
+  apply(g.room, g.tokens[0], "next", {}, end);
+  assert.equal(g.room.phase, "reveal");
   assert.throws(
     () =>
       apply(
@@ -241,11 +275,79 @@ test("late votes are rejected and missing votes score zero", () => {
   );
   assert.ok(g.room.players.every((p) => p.score === 0));
 });
-test("timed phases catch up after every client disconnects", () => {
+test("voting has no timer and waits for everyone; other phases still catch up", () => {
   const g = prepared();
+  assert.equal(g.room.deadline, null);
   tick(g.room, at + 3600000);
-  assert.equal(g.room.phase, "finished");
-  assert.equal(g.room.results.length, 3);
+  assert.equal(g.room.phase, "voting");
+  assert.equal(g.room.results.length, 0);
+  assert.throws(() => apply(g.room, g.tokens[0], "extend", {}, at), /No timer/);
+  const q = g.room.queue[0];
+  const voters = g.tokens.filter((_, i) => g.room.players[i].id !== q.playerId);
+  apply(g.room, voters[0], "vote", { questionId: q.id, optionId: q.options[0].id }, at);
+  assert.equal(g.room.deadline, null);
+  assert.deepEqual(snapshot(g.room, g.tokens[0], at).votedIds, [
+    g.room.players[g.tokens.indexOf(voters[0])].id,
+  ]);
+  apply(g.room, voters[1], "vote", { questionId: q.id, optionId: q.options[1].id }, at);
+  assert.equal(g.room.deadline, at + 3000);
+  tick(g.room, at + 3600000);
+  assert.equal(g.room.results.length, 1);
+  // The results stay up with no timer until everyone taps Next.
+  assert.equal(g.room.phase, "reveal");
+  assert.equal(g.room.deadline, null);
+});
+test("only the host can close voting early", () => {
+  const g = prepared();
+  const notHost = g.tokens[1];
+  assert.throws(() => apply(g.room, notHost, "next", {}, at), /Only the host/);
+  apply(g.room, g.tokens[0], "next", {}, at);
+  assert.equal(g.room.phase, "reveal");
+  assert.equal(g.room.results.length, 1);
+});
+test("demo bots vote straight away so results show without a timer", () => {
+  const { room, token } = newRoom("Robin", true, at, "adult");
+  apply(room, token, "start", {}, at);
+  apply(
+    room,
+    token,
+    "answers",
+    {
+      answers: [
+        { promptId: firstPrompt(room, token), truth: "Cafe", lie: "Zoo" },
+      ],
+      submitted: true,
+    },
+    at,
+  );
+  begin(room, token);
+  let mineSeen = false;
+  for (let i = 0; i < 20 && room.phase !== "finished"; i++) {
+    if (room.phase === "voting") {
+      const q = room.queue[room.questionIndex];
+      if (q.playerId === room.players[0].id) {
+        mineSeen = true;
+        tick(room, at);
+        assert.equal(room.deadline, at + 3000);
+      } else {
+        tick(room, at);
+        assert.equal(room.deadline, null);
+        apply(room, token, "vote", { questionId: q.id, optionId: q.options[0].id }, at);
+        assert.equal(room.deadline, at + 3000);
+      }
+    }
+    if (room.phase === "reveal") {
+      // Bots are ready straight away, so the human tapping Next moves the game on.
+      tick(room, at);
+      const index = room.questionIndex;
+      apply(room, token, "ready-next", {}, at);
+      assert.ok(room.questionIndex === index + 1 || room.phase === "finished");
+      continue;
+    }
+    tick(room, room.deadline);
+  }
+  assert.ok(mineSeen);
+  assert.equal(room.phase, "finished");
 });
 test("expired and invalid sessions cannot read a room", () => {
   const g = group();
@@ -266,7 +368,7 @@ test("demo is explicitly labelled and its extra players are bots", () => {
 });
 test("replay resets scores, votes, answers and readiness", () => {
   const g = prepared();
-  tick(g.room, at + 3600000);
+  finish(g.room, g.tokens[0]);
   apply(g.room, g.tokens[0], "replay", {}, at + 3600001);
   assert.equal(g.room.phase, "lobby");
   assert.equal(g.room.results.length, 0);
@@ -312,19 +414,26 @@ test("authors can review and swap decoys without changing their true answer", ()
     before = [...p.answers[0].decoys];
   g.room.phase = "writing";
   g.room.deadline = at + 60000;
-  apply(g.room, g.tokens[0], "reroll", { promptId: "first-job" }, at);
+  apply(g.room, g.tokens[0], "reroll", { promptId: p.answers[0].promptId }, at);
   assert.equal(p.answers[0].truth, "True job 0");
   assert.ok(p.answers[0].decoys.every((x) => !before.includes(x)));
   const own = snapshot(g.room, g.tokens[0], at),
     other = snapshot(g.room, g.tokens[1], at);
   assert.deepEqual(own.ownAnswers[0].decoys, p.answers[0].decoys);
-  assert.notDeepEqual(other.ownAnswers[0].decoys, p.answers[0].decoys);
-  apply(g.room, g.tokens[0], "begin", {}, at);
+  assert.equal(other.ownAnswers[0].truth, "True job 1");
+  begin(g.room, g.tokens[0]);
   assert.ok(
     g.room.queue[0].options.some((o) => o.text === p.answers[0].decoys[0]),
   );
   assert.throws(
-    () => apply(g.room, g.tokens[0], "reroll", { promptId: "first-job" }, at),
+    () =>
+      apply(
+        g.room,
+        g.tokens[0],
+        "reroll",
+        { promptId: p.answers[0].promptId },
+        at,
+      ),
     /locked/,
   );
 });
@@ -344,15 +453,15 @@ test("mixed-age players receive their own suitable prompts without exposing age 
   const child = joinRoom(room, "Robin", at, "child"),
     teen = joinRoom(room, "Taylor", at, "teen");
   const view = (t) => snapshot(room, t, at);
-  assert.deepEqual(
-    view(child).prompts.map((p) => p.id),
-    ["favourite-food", "free-time", "dream-pet"],
-  );
-  assert.deepEqual(
-    view(teen).prompts.map((p) => p.id),
-    ["school-subject", "free-time", "dream-skill"],
-  );
-  assert.ok(view(token).prompts.some((p) => p.id === "first-job"));
+  for (const [t, ageGroup] of [
+    [child, "child"],
+    [teen, "teen"],
+    [token, "adult"],
+  ]) {
+    assert.equal(view(t).prompts.length, 3);
+    const allowed = new Set(promptPoolForPlayer({ ageGroup }).map((p) => p.id));
+    assert.ok(view(t).prompts.every((p) => allowed.has(p.id)));
+  }
   assert.equal(view(child).ageGroup, "child");
   assert.ok(view(child).players.every((p) => !("ageGroup" in p)));
   assert.ok(view(child).prompts.every((p) => !("decoys" in p)));
@@ -384,24 +493,21 @@ test("children cannot submit adult prompts by changing a request", () => {
     "answers",
     {
       answers: [
-        { promptId: "favourite-food", truth: "Pizza", lie: "Pancakes" },
+        { promptId: firstPrompt(room, token), truth: "Pizza", lie: "Pancakes" },
       ],
       submitted: true,
     },
     at,
   );
-  assert.equal(room.players[0].answers[0].promptId, "favourite-food");
+  assert.equal(room.players[0].answers[0].promptId, firstPrompt(room, token));
 });
 test("a complete mixed-age game builds and scores questions from all three sets", () => {
   const { room, token } = newRoom("Parent", false, at, "adult");
   const child = joinRoom(room, "Robin", at, "child"),
     teen = joinRoom(room, "Taylor", at, "teen");
   apply(room, token, "start", {}, at);
-  for (const [t, promptId] of [
-    [token, "first-job"],
-    [child, "favourite-food"],
-    [teen, "school-subject"],
-  ])
+  const selections = [token, child, teen].map((t) => [t, firstPrompt(room, t)]);
+  for (const [t, promptId] of selections)
     apply(
       room,
       t,
@@ -414,14 +520,14 @@ test("a complete mixed-age game builds and scores questions from all three sets"
       },
       at,
     );
-  apply(room, token, "begin", {}, at);
+  begin(room, token);
   assert.deepEqual(
     room.queue.map((q) => q.promptId),
-    ["first-job", "favourite-food", "school-subject"],
+    selections.map(([, id]) => id),
   );
   for (const q of room.queue)
     assert.equal(new Set(q.options.map((o) => o.text)).size, 4);
-  tick(room, at + 3600000);
+  finish(room, token);
   assert.equal(room.phase, "finished");
   assert.equal(room.results.length, 3);
 });
@@ -467,7 +573,7 @@ test("a two-player game alternates roles, keeps votes private and scores correct
       {
         answers: [
           {
-            promptId: "first-job",
+            promptId: firstPrompt(room, t),
             truth: "Working in a cafe",
             lie: "Walking dogs",
           },
@@ -476,10 +582,9 @@ test("a two-player game alternates roles, keeps votes private and scores correct
       },
       at,
     );
-  apply(room, token, "begin", {}, at);
+  begin(room, token);
   assert.equal(room.queue.length, 2);
-  tick(room, room.deadline);
-  tick(room, room.deadline);
+  assert.equal(room.phase, "voting");
   let q = room.queue[0],
     when = room.deadline - 10000;
   const lie = q.options.find((o) => o.kind === "lie"),
@@ -500,15 +605,19 @@ test("a two-player game alternates roles, keeps votes private and scores correct
   assert.equal(snapshot(room, token, when).myVote, null);
   assert.equal(snapshot(room, token, when).result, null);
   tick(room, room.deadline);
+  // Fooled one person (+1) and nobody spotted the truth (+1).
   assert.deepEqual(
     room.players.map((p) => p.score),
-    [1, 0],
+    [2, 0],
   );
-  apply(room, token, "next", {}, room.deadline - 1);
-  apply(room, token, "next", {}, room.deadline - 1);
+  // Results stay up until both players tap Next.
+  assert.equal(room.deadline, null);
+  apply(room, token, "ready-next", {}, at);
+  assert.equal(room.phase, "reveal");
+  assert.deepEqual(snapshot(room, partner, at).nextReadyIds, [room.players[0].id]);
+  apply(room, partner, "ready-next", {}, at);
   assert.equal(room.queue[room.questionIndex].playerId, room.players[1].id);
-  tick(room, room.deadline);
-  tick(room, room.deadline);
+  assert.equal(room.phase, "voting");
   q = room.queue[1];
   when = room.deadline - 10000;
   apply(
@@ -524,10 +633,10 @@ test("a two-player game alternates roles, keeps votes private and scores correct
   tick(room, room.deadline);
   assert.deepEqual(
     room.players.map((p) => p.score),
-    [3, 0],
+    [4, 0],
   );
-  apply(room, token, "next", {}, room.deadline - 1);
-  apply(room, token, "next", {}, room.deadline - 1);
+  // The host can skip ahead without waiting for everyone.
+  apply(room, token, "next", {}, at);
   assert.equal(room.phase, "finished");
   assert.equal(snapshot(room, partner, room.expiresAt - 1).history.length, 2);
 });
@@ -541,13 +650,14 @@ test("the only voter can change their mind before the shortened deadline", () =>
       t,
       "answers",
       {
-        answers: [{ promptId: "first-job", truth: "Cafe", lie: "Babysitting" }],
+        answers: [
+          { promptId: firstPrompt(room, t), truth: "Cafe", lie: "Babysitting" },
+        ],
       },
       at,
     );
-  apply(room, token, "begin", {}, at);
-  tick(room, room.deadline);
-  tick(room, room.deadline);
+  begin(room, token);
+  assert.equal(room.phase, "voting");
   const q = room.queue[0],
     when = room.deadline - 10000;
   apply(
@@ -595,7 +705,7 @@ test("a two-player full game gives each person two questions, including mixed ag
       at,
     );
   }
-  apply(room, token, "begin", {}, at);
+  begin(room, token);
   assert.equal(room.queue.length, 4);
   assert.deepEqual(
     room.queue.map((q) => q.playerId),
@@ -606,7 +716,7 @@ test("a two-player full game gives each person two questions, including mixed ag
       room.players[1].id,
     ],
   );
-  tick(room, at + 3600000);
+  finish(room, token);
   assert.equal(room.phase, "finished");
   assert.ok(room.players.every((p) => p.score === 0));
 });
@@ -633,10 +743,11 @@ test("all-26-plus rooms get the extra-silly pack and can finish a game", () => {
   assert.equal(room.promptPack, "extra-silly");
   for (const t of [token, guest]) {
     const view = snapshot(room, t, at);
-    assert.deepEqual(
-      view.prompts.map((p) => p.id),
-      ["ridiculous-purchase", "pointless-rivalry", "terrible-excuse"],
+    assert.equal(view.prompts.length, 3);
+    const allowed = new Set(
+      promptPoolForPlayer({ ageGroup: "adult26" }, room).map((p) => p.id),
     );
+    assert.ok(view.prompts.every((p) => allowed.has(p.id)));
     apply(
       room,
       t,
@@ -652,9 +763,9 @@ test("all-26-plus rooms get the extra-silly pack and can finish a game", () => {
       at,
     );
   }
-  apply(room, token, "begin", {}, at);
+  begin(room, token);
   assert.equal(room.queue.length, 2);
-  tick(room, at + 3600000);
+  finish(room, token);
   assert.equal(room.phase, "finished");
 });
 test("one younger or unconfirmed player keeps a room on personal age-suitable prompts", () => {
@@ -692,9 +803,335 @@ test("26-plus solo demos include simulated older players and matching silly answ
       .every(
         (p) =>
           p.ageGroup === "adult26" &&
-          p.answers[0].promptId === "ridiculous-purchase",
+          p.answers.every(
+            (a) =>
+              promptsForPlayer(p, room).some((q) => q.id === a.promptId) &&
+              PROMPTS.find((q) => q.id === a.promptId)
+                .decoys.concat(
+                  PROMPTS.find((q) => q.id === a.promptId).wildcards,
+                )
+                .includes(a.truth),
+          ),
       ),
   );
   apply(room, token, "start", {}, at);
   assert.equal(room.promptPack, "extra-silly");
+});
+
+test("each question opens straight into voting with no read-only pause", () => {
+  const g = prepared();
+  assert.equal(g.room.phase, "voting");
+  assert.equal(g.room.deadline, null);
+  const q = g.room.queue[0];
+  const voter = g.tokens[g.room.players.findIndex((p) => p.id !== q.playerId)];
+  apply(g.room, voter, "vote", { questionId: q.id, optionId: q.options[0].id }, at);
+  assert.equal(snapshot(g.room, voter, at).myVote, q.options[0].id);
+});
+
+test("the featured player gets a bonus when nobody spots their truth", () => {
+  const scoreFor = (pickKinds) => {
+    const g = prepared(),
+      q = g.room.queue[0],
+      subject = g.room.players.findIndex((p) => p.id === q.playerId),
+      voters = g.tokens.filter((_, i) => i !== subject);
+    pickKinds.forEach((kind, i) =>
+      apply(
+        g.room,
+        voters[i],
+        "vote",
+        { questionId: q.id, optionId: q.options.find((o) => o.kind === kind).id },
+        at,
+      ),
+    );
+    apply(g.room, g.tokens[0], "next", {}, at);
+    return { subject: g.room.players[subject].score, result: g.room.results[0] };
+  };
+  // Both picked decoys: nobody fooled by the lie, but nobody spotted the truth either.
+  let r = scoreFor(["decoy", "wildcard"]);
+  assert.equal(r.subject, 1);
+  assert.equal(r.result.stumpBonus, 1);
+  // One fell for the lie, one picked a decoy: +1 fooled, +1 bonus.
+  r = scoreFor(["lie", "decoy"]);
+  assert.equal(r.subject, 2);
+  // Someone spotted the truth: no bonus.
+  r = scoreFor(["truth", "lie"]);
+  assert.equal(r.subject, 1);
+  assert.equal(r.result.stumpBonus, 0);
+  // Nobody voted at all: no bonus.
+  r = scoreFor([]);
+  assert.equal(r.subject, 0);
+  assert.equal(r.result.stumpBonus, 0);
+});
+
+test("only players can be ready at the reveal, and Next is refused before results", () => {
+  const g = prepared();
+  assert.throws(() => apply(g.room, g.tokens[1], "ready-next", {}, at), /results first/);
+  apply(g.room, g.tokens[0], "next", {}, at);
+  assert.equal(g.room.phase, "reveal");
+  assert.throws(() => apply(g.room, g.tokens[0], "extend", {}, at), /No timer/);
+  apply(g.room, g.tokens[1], "ready-next", {}, at);
+  apply(g.room, g.tokens[2], "ready-next", {}, at);
+  assert.equal(g.room.phase, "reveal");
+  apply(g.room, g.tokens[0], "ready-next", {}, at);
+  assert.equal(g.room.phase, "voting");
+  assert.equal(g.room.questionIndex, 1);
+  assert.deepEqual(snapshot(g.room, g.tokens[0], at).nextReadyIds, []);
+});
+
+test("the game starts by itself once everyone has locked in their answers", () => {
+  const g = group();
+  apply(g.room, g.tokens[0], "start", {}, at);
+  assert.equal(g.room.deadline, null);
+  g.tokens.forEach((t, i) => {
+    assert.equal(g.room.phase, "writing");
+    apply(
+      g.room,
+      t,
+      "answers",
+      {
+        answers: [{ promptId: firstPrompt(g.room, t), truth: "Real " + i, lie: "Fake " + i }],
+        submitted: true,
+      },
+      at,
+    );
+  });
+  assert.equal(g.room.phase, "voting");
+  assert.equal(g.room.queue.length, 3);
+});
+test("saving answers without locking in does not start the game", () => {
+  const g = group();
+  apply(g.room, g.tokens[0], "start", {}, at);
+  g.tokens.forEach((t, i) =>
+    apply(
+      g.room,
+      t,
+      "answers",
+      { answers: [{ promptId: firstPrompt(g.room, t), truth: "Real " + i, lie: "Fake " + i }] },
+      at,
+    ),
+  );
+  assert.equal(g.room.phase, "writing");
+  tick(g.room, at + 3600000);
+  assert.equal(g.room.phase, "writing");
+  apply(g.room, g.tokens[0], "begin", {}, at);
+  assert.equal(g.room.phase, "voting");
+});
+
+test("any player can call a rematch from the final scores", () => {
+  const g = prepared();
+  for (let i = 0; i < 100 && g.room.phase !== "finished"; i++) advance(g.room, g.tokens[0]);
+  assert.equal(g.room.phase, "finished");
+  apply(g.room, g.tokens[2], "replay", {}, at);
+  assert.equal(g.room.phase, "lobby");
+  assert.equal(g.room.players.length, 3);
+  assert.ok(g.room.players.every((p) => p.score === 0));
+});
+
+// ---- Face off ----
+const photo = (tag = "A") => "data:image/jpeg;base64," + tag.repeat(40);
+function faceGame(mode = "faces") {
+  const g = group();
+  apply(g.room, g.tokens[0], "settings", { mode }, at);
+  apply(g.room, g.tokens[0], "start", {}, at);
+  return g;
+}
+const tokenOf = (g, playerId) =>
+  g.tokens[g.room.players.findIndex((p) => p.id === playerId)];
+test("a face-off round: pose, copy, judge, reveal, then photos are cleared", () => {
+  const g = faceGame();
+  assert.equal(g.room.phase, "posing");
+  assert.equal(g.room.queue.length, 3);
+  const q = g.room.queue[0],
+    poser = tokenOf(g, q.playerId),
+    copiers = g.tokens.filter((t) => t !== poser);
+  // Nobody sees anything before the poser has taken their photo.
+  assert.deepEqual(photosFor(g.room, copiers[0], at).photos, {});
+  assert.throws(
+    () => apply(g.room, copiers[0], "photo", { questionId: q.id, image: photo() }, at),
+    /Wait for the face/,
+  );
+  apply(g.room, poser, "photo", { questionId: q.id, image: photo("P") }, at);
+  assert.equal(g.room.phase, "copying");
+  // While copying, you see the face to copy and your own copy, never anyone else's.
+  apply(g.room, copiers[0], "photo", { questionId: q.id, image: photo("X") }, at);
+  const firstId = g.room.players[g.tokens.indexOf(copiers[0])].id,
+    secondId = g.room.players[g.tokens.indexOf(copiers[1])].id;
+  assert.deepEqual(
+    Object.keys(photosFor(g.room, copiers[1], at).photos),
+    [q.playerId],
+  );
+  assert.deepEqual(
+    Object.keys(photosFor(g.room, copiers[0], at).photos).sort(),
+    [q.playerId, firstId].sort(),
+  );
+  apply(g.room, copiers[1], "photo", { questionId: q.id, image: photo("Y") }, at);
+  assert.equal(g.room.phase, "judging");
+  assert.equal(Object.keys(photosFor(g.room, copiers[1], at).photos).length, 3);
+  // You can't vote for yourself or for the face being copied.
+  assert.throws(
+    () => apply(g.room, copiers[0], "face-vote", { questionId: q.id, playerId: firstId }, at),
+    /own photo/,
+  );
+  assert.throws(
+    () => apply(g.room, copiers[0], "face-vote", { questionId: q.id, playerId: q.playerId }, at),
+    /one of the entries/,
+  );
+  apply(g.room, poser, "face-vote", { questionId: q.id, playerId: firstId }, at);
+  apply(g.room, copiers[0], "face-vote", { questionId: q.id, playerId: secondId }, at);
+  assert.equal(g.room.deadline, null);
+  apply(g.room, copiers[1], "face-vote", { questionId: q.id, playerId: firstId }, at);
+  assert.equal(g.room.deadline, at + 3000);
+  tick(g.room, g.room.deadline);
+  assert.equal(g.room.phase, "reveal");
+  const result = g.room.results[0];
+  assert.equal(result.type, "face");
+  assert.equal(result.tally[firstId], 2);
+  assert.equal(g.room.players.find((p) => p.id === firstId).score, 4);
+  assert.equal(g.room.players.find((p) => p.id === secondId).score, 2);
+  g.tokens.forEach((t) => apply(g.room, t, "ready-next", {}, at));
+  assert.equal(g.room.phase, "posing");
+  assert.deepEqual(g.room.shots, {});
+});
+test("face off is off for under-13s and in the demo", () => {
+  const { room, token } = newRoom("Parent", false, at, "adult");
+  joinRoom(room, "Robin", at, "child");
+  apply(room, token, "settings", { mode: "faces" }, at);
+  assert.throws(() => apply(room, token, "start", {}, at), /under 13/);
+  const demo = newRoom("Solo", true, at, "adult");
+  assert.throws(
+    () => apply(demo.room, demo.token, "settings", { mode: "mixed" }, at),
+    /can’t take photos or draw/,
+  );
+  assert.throws(
+    () => apply(demo.room, demo.token, "settings", { mode: "silly" }, at),
+    /game type/,
+  );
+});
+test("photos must be small JPEGs for the current round", () => {
+  const g = faceGame();
+  const q = g.room.queue[0],
+    poser = tokenOf(g, q.playerId);
+  for (const image of ["data:image/png;base64,AAAA", "<script>", photo("A".repeat(2000))])
+    assert.throws(
+      () => apply(g.room, poser, "photo", { questionId: q.id, image }, at),
+      /didn’t come through/,
+    );
+  assert.throws(
+    () => apply(g.room, poser, "photo", { questionId: "old", image: photo() }, at),
+    /previous round/,
+  );
+});
+test("the host can skip a missing poser or close photos early", () => {
+  const g = faceGame();
+  const first = g.room.queue[0];
+  apply(g.room, g.tokens[0], "next", {}, at);
+  assert.equal(g.room.questionIndex, 1);
+  assert.equal(g.room.phase, "posing");
+  const q = g.room.queue[1],
+    poser = tokenOf(g, q.playerId);
+  apply(g.room, poser, "photo", { questionId: q.id, image: photo() }, at);
+  apply(g.room, g.tokens[0], "next", {}, at);
+  // Nobody copied, so there is nothing to judge: straight to the results.
+  assert.equal(g.room.phase, "reveal");
+  assert.notEqual(first.id, q.id);
+});
+test("mixed games add one face-off or doodle per player after the writing step", () => {
+  const g = group();
+  apply(g.room, g.tokens[0], "settings", { mode: "mixed" }, at);
+  apply(g.room, g.tokens[0], "start", {}, at);
+  assert.equal(g.room.phase, "writing");
+  g.tokens.forEach((t, i) =>
+    apply(
+      g.room,
+      t,
+      "answers",
+      {
+        answers: [{ promptId: firstPrompt(g.room, t), truth: "Real " + i, lie: "Fake " + i }],
+        submitted: true,
+      },
+      at,
+    ),
+  );
+  const types = g.room.queue.map((q) => q.type ?? "truth");
+  assert.equal(types.filter((t) => t === "face").length, 2);
+  assert.equal(types.filter((t) => t === "doodle").length, 1);
+  assert.equal(types.filter((t) => t === "truth").length, 3);
+  assert.equal(g.room.phase, "voting");
+  // Nobody poses straight after their own truth question.
+  g.room.queue.forEach((q, i) => {
+    if (q.type && q.type !== "truth")
+      assert.notEqual(q.playerId, g.room.queue[i - 1].playerId);
+  });
+});
+
+// ---- Doodle off ----
+test("a doodle round: everyone draws, entries stay private, the room votes for the funniest", () => {
+  const g = faceGame("doodles");
+  assert.equal(g.room.phase, "drawing");
+  const q = g.room.queue[0];
+  assert.equal(q.type, "doodle");
+  assert.match(q.title, /^Draw /);
+  assert.ok(q.title.includes(g.room.players.find((p) => p.id === q.playerId).name));
+  const ids = g.room.players.map((p) => p.id);
+  apply(g.room, g.tokens[0], "photo", { questionId: q.id, image: photo("D0") }, at);
+  // While drawing, you only ever see your own drawing.
+  assert.deepEqual(Object.keys(photosFor(g.room, g.tokens[0], at).photos), [ids[0]]);
+  assert.deepEqual(photosFor(g.room, g.tokens[1], at).photos, {});
+  // Redrawing replaces your entry.
+  apply(g.room, g.tokens[0], "photo", { questionId: q.id, image: photo("D1") }, at);
+  apply(g.room, g.tokens[1], "photo", { questionId: q.id, image: photo("D2") }, at);
+  assert.equal(g.room.phase, "drawing");
+  apply(g.room, g.tokens[2], "photo", { questionId: q.id, image: photo("D3") }, at);
+  assert.equal(g.room.phase, "judging");
+  assert.equal(Object.keys(photosFor(g.room, g.tokens[2], at).photos).length, 3);
+  // The featured player's drawing can win too; your own can't get your vote.
+  assert.throws(
+    () => apply(g.room, g.tokens[1], "face-vote", { questionId: q.id, playerId: ids[1] }, at),
+    /own photo/,
+  );
+  apply(g.room, g.tokens[0], "face-vote", { questionId: q.id, playerId: q.playerId === ids[0] ? ids[1] : q.playerId }, at);
+  apply(g.room, g.tokens[1], "face-vote", { questionId: q.id, playerId: ids[2] }, at);
+  apply(g.room, g.tokens[2], "face-vote", { questionId: q.id, playerId: ids[1] }, at);
+  tick(g.room, g.room.deadline);
+  assert.equal(g.room.phase, "reveal");
+  assert.equal(g.room.results[0].type, "doodle");
+  assert.equal(g.room.results[0].copies.length, 3);
+  assert.equal(
+    g.room.players.reduce((sum, p) => sum + p.score, 0),
+    6,
+  );
+});
+test("doodle rounds work for under-13s; mixed rooms with a child get doodles instead of photos", () => {
+  const { room, token } = newRoom("Parent", false, at, "adult");
+  const child = joinRoom(room, "Robin", at, "child");
+  apply(room, token, "settings", { mode: "doodles" }, at);
+  apply(room, token, "start", {}, at);
+  assert.equal(room.phase, "drawing");
+  const mixed = newRoom("Parent", false, at, "adult");
+  const kid = joinRoom(mixed.room, "Robin", at, "child");
+  apply(mixed.room, mixed.token, "settings", { mode: "mixed" }, at);
+  apply(mixed.room, mixed.token, "start", {}, at);
+  for (const t of [mixed.token, kid])
+    apply(
+      mixed.room,
+      t,
+      "answers",
+      {
+        answers: [{ promptId: firstPrompt(mixed.room, t), truth: "Real", lie: "Fake" }],
+        submitted: true,
+      },
+      at,
+    );
+  const types = mixed.room.queue.map((q) => q.type ?? "truth");
+  assert.equal(types.includes("face"), false);
+  assert.equal(types.filter((t) => t === "doodle").length, 2);
+  assert.ok(child);
+});
+test("each doodle round in a game gets a different prompt", () => {
+  const { room, token } = newRoom("Ana", false, at, "adult");
+  for (const name of ["Ben", "Cal", "Dee", "Eli", "Fay", "Gus", "Hal"]) joinRoom(room, name, at, "adult");
+  apply(room, token, "settings", { mode: "doodles", questionsPerPlayer: 2 }, at);
+  apply(room, token, "start", {}, at);
+  const templates = room.queue.map((q, i) => q.title.replace(room.players.find((p) => p.id === q.playerId).name, "{name}"));
+  assert.equal(new Set(templates).size, room.queue.length);
 });

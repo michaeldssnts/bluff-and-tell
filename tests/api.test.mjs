@@ -1,4 +1,5 @@
 import test from "node:test";
+import { promptPoolForPlayer } from "../server/prompts.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -203,7 +204,11 @@ test("create and join store each player's age group and return tailored prompts"
     ageGroup: "teen",
   });
   assert.equal(joined.status, 200);
-  assert.ok(joined.data.room.prompts.some((p) => p.id === "school-subject"));
+  assert.equal(joined.data.room.prompts.length, 3);
+  const allowed = new Set(
+    promptPoolForPlayer({ ageGroup: "teen" }).map((p) => p.id),
+  );
+  assert.ok(joined.data.room.prompts.every((p) => allowed.has(p.id)));
   const restored = await call(base, "GET", null, created.data.token);
   assert.equal(restored.data.room.ageGroup, "child");
   assert.ok(restored.data.room.players.every((p) => !("ageGroup" in p)));
@@ -298,4 +303,62 @@ test("the API lets a host start when exactly two human players have joined", asy
   assert.equal(started.data.room.players.length, 2);
   const other = await call(base, "GET", null, joined.data.token);
   assert.equal(other.data.room.phase, "writing");
+});
+
+test("API carries recent question history into new rooms and joining players", async (t) => {
+  const { call } = await setup(t);
+  const previous = await call("/api/rooms", "POST", {
+    name: "Previous",
+    ageGroup: "adult26",
+    demo: true,
+  });
+  const recent = previous.data.room.prompts.map((p) => p.id);
+  const next = await call("/api/rooms", "POST", {
+    name: "Next",
+    ageGroup: "adult26",
+    demo: true,
+    recentPromptIds: recent,
+  });
+  assert.equal(next.status, 201);
+  assert(next.data.room.prompts.every((p) => !recent.includes(p.id)));
+  const joined = await call(`/api/rooms/${next.data.room.code}/join`, "POST", {
+    name: "Guest",
+    ageGroup: "adult26",
+    recentPromptIds: recent,
+  });
+  assert.equal(joined.status, 200);
+  assert(joined.data.room.prompts.every((p) => !recent.includes(p.id)));
+  assert(!JSON.stringify(joined.data).includes('"promptHistory"'));
+});
+test("face-off photos upload through the API and are only shown when allowed", async (t) => {
+  const { call } = await setup(t);
+  const host = (await call("/api/rooms", "POST", { ageGroup: "adult", name: "Mia" })).data;
+  const base = "/api/rooms/" + host.room.code;
+  const guest = (await call(base + "/join", "POST", { ageGroup: "adult", name: "Tumi" })).data;
+  const act = (token, action, data = {}) =>
+    call(base + "/action", "POST", { action, data, requestId: randomUUID() }, token);
+  await act(host.token, "settings", { mode: "faces" });
+  const started = await act(host.token, "start");
+  assert.equal(started.data.room.phase, "posing");
+  const q = started.data.room.question;
+  assert.equal(q.type, "face");
+  const poser = q.playerId === host.room.me ? host : guest,
+    copier = poser === host ? guest : host;
+  // A realistic resized photo is ~20-50 KB, more than the old 16 KB request limit.
+  const image = "data:image/jpeg;base64," + "A".repeat(40000);
+  const posed = await act(poser.token, "photo", { questionId: q.id, image });
+  assert.equal(posed.status, 200);
+  assert.equal(posed.data.room.phase, "copying");
+  assert.deepEqual(posed.data.room.shotIds, [poser.room.me]);
+  // Snapshots never carry the photos themselves.
+  assert.equal(JSON.stringify(posed.data).includes("A".repeat(100)), false);
+  const seen = await call(base + "/photos", "GET", undefined, copier.token);
+  assert.equal(seen.status, 200);
+  assert.deepEqual(Object.keys(seen.data.photos), [poser.room.me]);
+  const tooBig = await act(copier.token, "photo", {
+    questionId: q.id,
+    image: "data:image/jpeg;base64," + "A".repeat(70000),
+  });
+  assert.equal(tooBig.status, 413);
+  assert.equal((await call(base + "/photos", "GET", undefined, "nope")).status, 401);
 });

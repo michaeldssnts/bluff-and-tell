@@ -50,7 +50,7 @@ async function readBody(request) {
     const { value, done } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > 16000) {
+    if (size > 64000) {
       await reader.cancel();
       return null;
     }
@@ -76,11 +76,14 @@ export default {
       return response({ inviteOrigin: new URL(request.url).origin });
     const create = path === "/api/rooms" && method === "POST";
     const match = path.match(
-      /^\/api\/rooms\/([A-Z2-9]{6})(?:\/(join|action))?$/,
+      /^\/api\/rooms\/([A-Z2-9]{6})(?:\/(join|action|photos))?$/,
     );
     if (!create && !match) return response({ error: "Not found." }, 404);
     const operation = match?.[2];
-    if (!create && method !== (operation ? "POST" : "GET"))
+    if (
+      !create &&
+      method !== (operation && operation !== "photos" ? "POST" : "GET")
+    )
       return response({ error: "Method not allowed." }, 405);
     try {
       const body = await readBody(request);
