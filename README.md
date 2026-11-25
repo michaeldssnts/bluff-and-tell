@@ -40,3 +40,13 @@ Open http://localhost:4317 in your browser. Multiplayer play requires a connecti
 npm test
 npm run check
 ```
+
+## Deploying
+
+Code goes to GitHub first, then Cloudflare:
+
+- **Pull requests** run the checks and tests.
+- **Merging to `main`** runs the tests, deploys to staging (https://bluff-and-tell-staging.bluff-and-tell.workers.dev) and checks the live site.
+- **Production** only deploys when someone runs the *Test and deploy* workflow by hand from `main` in GitHub Actions and chooses `production`.
+
+The workflow needs two repository secrets: `CLOUDFLARE_API_TOKEN` (a Cloudflare API token with the *Edit Cloudflare Workers* permissions) and `CLOUDFLARE_ACCOUNT_ID`.
