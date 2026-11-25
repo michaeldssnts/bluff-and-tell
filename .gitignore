@@ -1,0 +1,15 @@
+.local/
+node_modules/
+.aws-sam/
+dist/
+*.tar.gz
+.DS_Store
+.env
+.env.*
+!.env.example
+samconfig.toml
+.wrangler/
+.dev.vars
+.dev.vars.*
+.openai/
+coverage/

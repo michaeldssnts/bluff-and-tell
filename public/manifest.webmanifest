@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Bluff & Tell",
+  "short_name": "Bluff & Tell",
+  "description": "Know your friends. Believe nothing.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#211439",
+  "theme_color": "#211439",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

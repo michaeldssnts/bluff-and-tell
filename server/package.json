@@ -1,0 +1,1 @@
+{"name":"bluff-and-tell-api","version":"0.1.0","private":true,"type":"module","dependencies":{"@aws-sdk/client-dynamodb":"3.1177.0"}}

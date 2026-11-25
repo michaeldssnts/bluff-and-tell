@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#211439" />
+    <meta
+      name="description"
+      content="Know your friends. Believe nothing. A multiplayer party quiz full of truths, lies and outrageous guesses. Join from any phone."
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Bluff & Tell — Know your friends. Believe nothing.</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" type="module"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to game</a>
+    <div id="app"></div>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <dialog id="help-dialog" aria-labelledby="help-title">
+      <button
+        class="icon-button close-dialog"
+        data-close-dialog
+        aria-label="Close instructions"
+      >
+        ×
+      </button>
+      <span class="eyebrow">THE GROUP CHAT, IN GAME FORM</span>
+      <h2 id="help-title">A little truth.<br />A lot of bluff.</h2>
+      <ol class="rules-list">
+        <li>
+          <strong>Bring your people.</strong> One host, one room code, 2–8
+          players. Everyone uses their own phone.
+        </li>
+        <li>
+          <strong>Spill something real.</strong> Answer three prompts about
+          yourself with one truth and one convincing lie.
+        </li>
+        <li>
+          <strong>Trust absolutely nobody.</strong> Guess your friends’ truths
+          from four options. The wildest one might be real.
+        </li>
+        <li>
+          <strong>Enjoy the reveal.</strong> Correct guesses earn 2 points.
+          Every person who picks your lie earns you 1 point.
+        </li>
+      </ol>
+      <p class="muted">
+        The featured player sits out their own question. Everyone gets the same
+        number of featured questions. Skip personal prompts you don’t want to
+        answer.
+      </p>
+      <button class="button primary full" data-close-dialog>
+        Got it. I’m suspicious.
+      </button>
+    </dialog>
+    <dialog id="recommend-dialog" aria-labelledby="recommend-title">
+      <button
+        class="icon-button close-dialog"
+        data-close-dialog
+        aria-label="Close sharing"
+      >
+        ×
+      </button>
+      <span class="eyebrow">GOOD LAUGHS TRAVEL</span>
+      <h2 id="recommend-title">Share the suspicion.</h2>
+      <p>
+        Recommend Bluff &amp; Tell to your people. Pick a frame for your feed or
+        story.
+      </p>
+      <label for="social-format">Social frame</label>
+      <select id="social-format">
+        <option value="square">Square post · 1080 × 1080</option>
+        <option value="story">Story · 1080 × 1920</option>
+      </select>
+      <div class="social-preview">
+        <canvas
+          id="social-card"
+          role="img"
+          aria-label="Bluff and Tell social card: Know your friends. Believe nothing. One truth. Three lies. Laugh yourself silly. 2–8 players, any phone, no download."
+        ></canvas>
+      </div>
+      <div class="social-actions">
+        <button class="button primary" id="share-recommendation" disabled>
+          Share recommendation</button
+        ><button class="button secondary" id="download-social-card" disabled>
+          Download frame
+        </button>
+      </div>
+      <label for="recommend-link">Game link</label>
+      <div class="join-row">
+        <input id="recommend-link" readonly type="url" /><button
+          class="button secondary"
+          id="copy-recommendation"
+        >
+          Copy link
+        </button>
+      </div>
+      <p class="muted">
+        Save the frame to post on Instagram, Facebook or your favourite social
+        app. Add the game link to your caption or story link sticker. No player
+        names, answers or room code are included.
+      </p>
+      <p class="note" id="recommend-preview-note">
+        This is a local preview. The link only works on the same Wi-Fi while
+        this computer is running. Public sharing will work once the game is
+        hosted.
+      </p>
+    </dialog>
+    <dialog id="privacy-dialog" aria-labelledby="privacy-title">
+      <button
+        class="icon-button close-dialog"
+        data-close-dialog
+        aria-label="Close privacy information"
+      >
+        ×
+      </button>
+      <span class="eyebrow">KEEP IT IN THE ROOM</span>
+      <h2 id="privacy-title">Your secrets,<br />your people.</h2>
+      <p>
+        Rooms are private by invite code. Anyone who has the code can join an
+        unlocked lobby, so share it only with your group.
+      </p>
+      <p>
+        Your nickname, age group, answers and votes are stored to run the game.
+        Your age group is used to choose prompts and is not shown to other
+        players. Other players see your answer options during your question, and
+        the truth and votes at the reveal. The host sees readiness counts, not
+        your private answer sheet.
+      </p>
+      <p>
+        Rooms expire after 24 hours. Expired data is inaccessible immediately
+        and removed from storage by the backend’s cleanup process. Your browser
+        stores your room session and unfinished answers so you can reconnect.
+      </p>
+      <p>
+        No advertising or analytics trackers are enabled in this version. We do
+        not send your answers to an AI service.
+      </p>
+      <button class="button secondary full" data-close-dialog>
+        Back to the game
+      </button>
+    </dialog>
+    <noscript
+      >This game needs JavaScript to connect everyone in your room. Please
+      enable JavaScript and reload.</noscript
+    >
+  </body>
+</html>
