@@ -332,11 +332,20 @@ test("API carries recent question history into new rooms and joining players", a
 });
 test("face-off photos upload through the API and are only shown when allowed", async (t) => {
   const { call } = await setup(t);
-  const host = (await call("/api/rooms", "POST", { ageGroup: "adult", name: "Mia" })).data;
+  const host = (
+    await call("/api/rooms", "POST", { ageGroup: "adult", name: "Mia" })
+  ).data;
   const base = "/api/rooms/" + host.room.code;
-  const guest = (await call(base + "/join", "POST", { ageGroup: "adult", name: "Tumi" })).data;
+  const guest = (
+    await call(base + "/join", "POST", { ageGroup: "adult", name: "Tumi" })
+  ).data;
   const act = (token, action, data = {}) =>
-    call(base + "/action", "POST", { action, data, requestId: randomUUID() }, token);
+    call(
+      base + "/action",
+      "POST",
+      { action, data, requestId: randomUUID() },
+      token,
+    );
   await act(host.token, "settings", { mode: "faces" });
   const started = await act(host.token, "start");
   assert.equal(started.data.room.phase, "posing");
@@ -360,5 +369,40 @@ test("face-off photos upload through the API and are only shown when allowed", a
     image: "data:image/jpeg;base64," + "A".repeat(70000),
   });
   assert.equal(tooBig.status, 413);
-  assert.equal((await call(base + "/photos", "GET", undefined, "nope")).status, 401);
+  assert.equal(
+    (await call(base + "/photos", "GET", undefined, "nope")).status,
+    401,
+  );
+});
+
+test("new web flow creates and joins without age, starts mixed rounds and survives reconnect", async (t) => {
+  const { call } = await setup(t);
+  const created = await call("/api/rooms", "POST", {
+    name: "Mia",
+    flowVersion: 2,
+  });
+  assert.equal(created.status, 201);
+  const { room, token } = created.data;
+  assert.equal(room.flowVersion, 2);
+  assert.equal(room.settings.mode, "mixed");
+  assert.equal(room.ageGroup, null);
+  const base = "/api/rooms/" + room.code;
+  const joined = await call(base + "/join", "POST", { name: "Tumi" });
+  assert.equal(joined.status, 200);
+  assert(joined.data.room.players.every((p) => p.profileReady));
+  const started = await call(
+    base + "/action",
+    "POST",
+    { action: "start", requestId: randomUUID() },
+    token,
+  );
+  assert.equal(started.status, 200);
+  assert.equal(started.data.room.question.total, 6);
+  assert.notEqual(started.data.room.phase, "lobby");
+  const reconnected = await call(base, "GET", null, joined.data.token);
+  assert.equal(reconnected.status, 200);
+  assert.equal(
+    reconnected.data.room.question.id,
+    started.data.room.question.id,
+  );
 });

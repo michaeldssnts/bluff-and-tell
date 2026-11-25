@@ -321,7 +321,7 @@ const adult = [
   ],
   [
     "adult-surprise",
-    "What ordinary adult task surprised you most?",
+    "What everyday task is trickier than it looks?",
     "Meal planning|Booking appointments|Buying cleaning products|Remembering bin day|Learning how many kinds of light bulb exist|Realising cushions need almost constant management|Having a favourite parking spot|Developing strong opinions about a sponge",
   ],
   [

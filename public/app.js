@@ -121,17 +121,19 @@ function footer() {
   return `<footer class="site-footer"><span>Know your friends. Believe nothing.</span><div class="footer-links"><span id="connection-status">${connected ? "Made for your people." : "Connection lost. Reconnecting…"}</span><button class="text-button" data-recommend>Recommend Bluff &amp; Tell</button><button class="text-button" data-privacy>Privacy</button></div></footer>`;
 }
 function demoNote() {
+  if (room.demo && room.flowVersion === 2 && room.phase !== "lobby")
+    return '<div class="note demo">Solo demo · You + 3 simulated players · Truth & lies only</div>';
   return room.demo
     ? '<div class="note demo">' +
         icon("sparkles") +
-        " <strong>Solo demo.</strong> Alex, Sam and Zee are simulated players. Timers are shorter so you can try a round. Real rooms use your longer party timings.</div>"
+        " <strong>Solo demo.</strong> Alex, Sam and Zee are simulated players. Try one truth question at a time. Photo and doodle rounds are available when you play with friends.</div>"
     : "";
 }
 function home() {
-  return `${header()}<main id="main"><section class="hero"><div class="hero-copy"><span class="pill lime">${icon("sparkles", 15)} THE TRUTH IS A PARTY GAME.</span><h1>Your friends.<br>Their secrets.<br><em>Big laughs.</em></h1><p class="hero-hook">One truth. Three lies.<br>A whole lot of “NO WAY!”</p><p>From date night to game night, find out how well you <strong>really</strong> know your people.</p><div class="hero-facts"><span>${icon("users", 16)} 2–8 players</span><span>${icon("phone", 16)} Any phone</span><span>${icon("check", 16)} No download</span></div></div><div class="entry-wrap"><div class="floating-card" aria-hidden="true"><small>WAIT. THAT’S ACTUALLY TRUE?</small><p>“You did <em>WHAT?!</em>”</p></div><span class="party-spark" aria-hidden="true">✳</span><section class="entry-card" aria-labelledby="entry-title"><span class="entry-kicker">GOOD COMPANY. BAD POKER FACES.</span><h2 id="entry-title">${inviteCode ? "You’re invited. Bring your best bluff." : "Bring your suspicious side."}</h2><p>${inviteCode ? `Room ${esc(inviteCode)} is already filled in. Choose a nickname to join.` : "A few truths. Some terrible lies. Your kind of people."}</p><form id="entry-form"><label for="nickname">What should we call you?</label><input id="nickname" name="name" placeholder="e.g. Sam" value="${esc(homeName)}" maxlength="22" minlength="2" autocomplete="nickname" required><button class="button primary full" type="submit" id="create-button">${icon(inviteCode ? "users" : "plus")} ${inviteCode ? "Join this room" : "Create a game"}</button><div class="divider">${inviteCode ? "YOUR ROOM CODE" : "GOT AN INVITE?"}</div><div class="join-row"><label for="room-code" class="room-code-label">Room code</label><input id="room-code" name="code" placeholder="K7P2QX" aria-label="Six-character room code" value="${esc(inviteCode)}" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false">${inviteCode ? "" : '<button type="button" class="button secondary" id="join-button">Join game</button>'}</div></form><button class="text-button demo-button" id="demo-button">${icon("play", 15)} Try a solo demo</button><p class="entry-foot">${icon("lock", 13)} Private rooms. No accounts. Just your people.</p></section></div></section><section class="how-strip" aria-label="How it works"><div class="how-item"><span class="how-icon">${icon("users", 22)}</span><div><h3>Round up your suspects.</h3><p>Share a room code. Everyone joins on their own phone.</p></div></div><div class="how-item"><span class="how-icon">${icon("eye", 22)}</span><div><h3>Spill it. Then bluff it.</h3><p>Answer prompts about yourself. Make the lie convincing.</p></div></div><div class="how-item"><span class="how-icon">${icon("sparkles", 22)}</span><div><h3>Guess. Gasp. Repeat.</h3><p>Pick the truth, catch the bluff, and enjoy the reveal.</p></div></div></section></main>${footer()}`;
+  return `${header()}<main id="main"><section class="hero"><div class="hero-copy"><span class="pill lime">${icon("sparkles", 15)} THE TRUTH IS A PARTY GAME.</span><h1>Your friends.<br>Their secrets.<br><em>Big laughs.</em></h1><p class="hero-hook">One truth. Three lies.<br>A whole lot of “NO WAY!”</p><p>From date night to game night, find out how well you <strong>really</strong> know your people.</p><div class="hero-facts"><span>${icon("users", 16)} 2–8 players</span><span>${icon("phone", 16)} Any phone</span><span>${icon("check", 16)} No download</span></div></div><div class="entry-wrap"><div class="floating-card" aria-hidden="true"><small>WAIT. THAT’S ACTUALLY TRUE?</small><p>“You did <em>WHAT?!</em>”</p></div><span class="party-spark" aria-hidden="true">✳</span><section class="entry-card" aria-labelledby="entry-title"><span class="entry-kicker">GOOD COMPANY. BAD POKER FACES.</span><h2 id="entry-title">${inviteCode ? "You’re invited. Bring your best bluff." : "Bring your suspicious side."}</h2><p>${inviteCode ? `Room ${esc(inviteCode)} is already filled in. Choose a nickname to join.` : "A few truths. Some terrible lies. Your kind of people."}</p><form id="entry-form"><label for="nickname">What should we call you?</label><input id="nickname" name="name" placeholder="e.g. Sam" value="${esc(homeName)}" maxlength="22" minlength="2" autocomplete="nickname" required><button class="button primary full" type="submit" id="create-button">${icon(inviteCode ? "users" : "plus")} ${inviteCode ? "Join this room" : "Create a game"}</button><div class="divider">${inviteCode ? "YOUR ROOM CODE" : "GOT AN INVITE?"}</div><div class="join-row"><label for="room-code" class="room-code-label">Room code</label><input id="room-code" name="code" placeholder="K7P2QX" aria-label="Six-character room code" value="${esc(inviteCode)}" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false">${inviteCode ? "" : '<button type="button" class="button secondary" id="join-button">Join game</button>'}</div></form><button class="text-button demo-button" id="demo-button">${icon("play", 15)} Try a solo demo</button><p class="entry-foot">${icon("lock", 13)} Private rooms. No accounts. Just your people.</p></section></div></section><section class="how-strip" aria-label="How it works"><div class="how-item"><span class="how-icon">${icon("users", 22)}</span><div><h3>Round up your suspects.</h3><p>Share a room code. Everyone joins on their own phone.</p></div></div><div class="how-item"><span class="how-icon">${icon("eye", 22)}</span><div><h3>Spill it. Then bluff it.</h3><p>Play one activity: a truth, a silly photo or a doodle.</p></div></div><div class="how-item"><span class="how-icon">${icon("sparkles", 22)}</span><div><h3>Guess. Gasp. Repeat.</h3><p>Vote, see the results, then tap Next together.</p></div></div></section></main>${footer()}`;
 }
 function roster(showScore = false) {
-  return `<div class="player-list">${room.players.map((p) => `<div class="player-row">${avatar(p)}<div class="player-name">${esc(p.name)}${p.id === room.me ? " <small>You" + (p.id === room.hostId ? " · Host" : "") + "</small>" : p.id === room.hostId ? "<small>Host</small>" : p.bot ? "<small>Demo player</small>" : ""}</div>${showScore ? `<span class="points">${p.score}<small>pts</small></span>` : room.phase === "writing" ? `<span class="player-meta ${p.ready ? "ready" : ""}">${p.ready ? icon("check", 15) + " Ready" : Math.min(p.answerCount, needed()) + "/" + needed() + " saved"}</span>` : isHost() && p.id !== room.me && !p.bot ? `<button class="icon-button" data-remove="${p.id}" aria-label="Remove ${esc(p.name)}">Remove</button>` : `<span class="player-meta">${p.profileReady === false ? "Choosing profile" : "Joined"}</span>`}</div>`).join("")}</div>`;
+  return `<div class="player-list">${room.players.map((p) => `<div class="player-row">${avatar(p)}<div class="player-name">${esc(p.name)}${p.id === room.me ? " <small>You" + (p.id === room.hostId ? " · Host" : "") + "</small>" : p.id === room.hostId ? "<small>Host</small>" : p.bot ? "<small>Demo player</small>" : ""}</div>${showScore ? `<span class="points">${p.score}<small>pts</small></span>` : room.phase === "writing" && room.flowVersion === 2 ? `<span class="player-meta">${p.id === room.question?.playerId ? "Answering now" : "Voting next"}</span>` : room.phase === "writing" ? `<span class="player-meta ${p.ready ? "ready" : ""}">${p.ready ? icon("check", 15) + " Ready" : Math.min(p.answerCount, needed()) + "/" + needed() + " saved"}</span>` : isHost() && p.id !== room.me && !p.bot ? `<button class="icon-button" data-remove="${p.id}" aria-label="Remove ${esc(p.name)}">Remove</button>` : `<span class="player-meta">${p.profileReady === false ? "Choosing profile" : "Joined"}</span>`}</div>`).join("")}</div>`;
 }
 function controls() {
   if (!isHost())
@@ -155,18 +157,54 @@ function roomProfile() {
 }
 function lobby() {
   const settings = room.settings;
-  const needsProfiles = room.players.some((p) => p.profileReady === false);
-  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">GOOD COMPANY. QUESTIONABLE ANSWERS.</span><h1>The room is yours.</h1><p>${isHost() ? "Invite your friends, set the mood, and get ready to question everything." : "You’re in. Make yourself comfortable while your host gets everyone together."}</p></div><span class="pill lime">${icon("users", 16)} ${room.players.length}/8 players</span></div>${demoNote()}${roomProfile()}<div class="game-layout"><div><section class="room-invite"><span class="eyebrow">YOUR INVITE CODE</span><div class="room-code">${esc(room.code)}</div><p>Open this website on another phone and enter the code.</p><div class="invite-actions"><button class="button" data-copy-link>${icon("link", 15)} Copy invite link</button><button class="button secondary" data-copy-code>${icon("copy", 15)} Copy code</button></div></section><section class="panel"><div class="panel-title"><h2>Your people</h2>${isHost() ? `<button class="text-button" data-action="lock">${icon("lock", 15)} ${room.locked ? "Unlock lobby" : "Lock lobby"}</button>` : ""}</div>${roster()}${room.players.length < 8 ? `<div class="empty-slot"><span class="avatar">+</span>${room.players.length === 2 ? "Two is all you need. Start whenever you’re ready." : "There’s room for more questionable characters."}</div>` : ""}</section></div><section class="panel"><div class="panel-title"><h2>${icon("shuffle", 19)} Set the vibe</h2><span class="pill purple">${isHost() ? "Host controls" : "Game settings"}</span></div><div class="settings-grid"><div class="field-row"><label for="game-mode">Game type<small>${room.demo ? "The demo players can’t take photos or draw, so the demo is truth and lies only." : "Face off: copy each other’s silly faces (off for under-13s). Doodle off: draw silly prompts about each other, fine for all ages."}</small></label><select id="game-mode" data-mode ${!isHost() || room.demo ? "disabled" : ""}>${[
+  const needsProfiles =
+    room.flowVersion !== 2 &&
+    room.players.some((p) => p.profileReady === false);
+  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">GOOD COMPANY. QUESTIONABLE ANSWERS.</span><h1>The room is yours.</h1><p>${isHost() ? "Invite your friends, set the mood, and get ready to question everything." : "You’re in. Make yourself comfortable while your host gets everyone together."}</p></div><span class="pill lime">${icon("users", 16)} ${room.players.length}/8 players</span></div>${demoNote()}${room.flowVersion === 2 ? '<ol class="flow-steps" aria-label="How each round works"><li>1. Play one activity</li><li>2. Vote</li><li>3. See results</li><li>Then tap Next together</li></ol>' : roomProfile()}<div class="game-layout"><div><section class="room-invite"><span class="eyebrow">YOUR INVITE CODE</span><div class="room-code">${esc(room.code)}</div><p>Open this website on another phone and enter the code.</p><div class="invite-actions"><button class="button" data-copy-link>${icon("link", 15)} Copy invite link</button><button class="button secondary" data-copy-code>${icon("copy", 15)} Copy code</button></div></section><section class="panel"><div class="panel-title"><h2>Your people</h2>${isHost() ? `<button class="text-button" data-action="lock">${icon("lock", 15)} ${room.locked ? "Unlock lobby" : "Lock lobby"}</button>` : ""}</div>${roster()}${room.players.length < 8 ? `<div class="empty-slot"><span class="avatar">+</span>${room.players.length === 2 ? "Two is all you need. Start whenever you’re ready." : "There’s room for more questionable characters."}</div>` : ""}</section></div><section class="panel"><div class="panel-title"><h2>${icon("shuffle", 19)} Set the vibe</h2><span class="pill purple">${isHost() ? "Host controls" : "Game settings"}</span></div><div class="settings-grid"><div class="field-row"><label for="game-mode">Game type<small>${room.demo ? "The demo players can’t take photos or draw, so the demo is truth and lies only." : "Mix truth & lies, silly photos and doodles. One activity at a time. Photos need camera permission; choose doodles or truth & lies if you prefer."}</small></label><select id="game-mode" data-mode ${!isHost() || room.demo ? "disabled" : ""}>${[
     ["classic", "Truth & lies"],
     ["faces", "Face off (photos)"],
     ["doodles", "Doodle off (drawing)"],
-    ["mixed", "Mixed"],
+    ["mixed", "Party mix · all three"],
   ]
-    .map(([v, l]) => `<option value="${v}" ${(settings.mode ?? "classic") === v ? "selected" : ""}>${l}</option>`)
-    .join("")}</select></div><div class="field-row"><label for="game-length">Game length<small>Everyone gets an equal turn.</small></label><select id="game-length" data-setting="questionsPerPlayer" ${!isHost() ? "disabled" : ""}><option value="1" ${settings.questionsPerPlayer === 1 ? "selected" : ""}>Quick game</option><option value="2" ${settings.questionsPerPlayer === 2 ? "selected" : ""}>Full game</option></select></div></div><p class="settings-note">${gameSummary(settings)} No timers: each step moves on once everyone is ready.<br><br>Correct guess: <strong>+2 points.</strong><br>Someone picks your lie: <strong>+1 point.</strong><br>Nobody spots your truth: <strong>+1 bonus.</strong>${(settings.mode ?? "classic") !== "classic" ? "<br>Each vote for your face-off copy or doodle: <strong>+2 points.</strong>" : ""}</p>${isHost() ? `<button class="button primary full" data-action="start" ${room.players.length < 2 || needsProfiles ? "disabled" : ""}>${icon("play", 18)} ${room.players.length < 2 ? "Waiting for your second player…" : needsProfiles ? "Waiting for player profiles…" : "Start the game"}</button>` : '<div class="note center">Waiting for your host to start the game.</div>' + (room.hostAway ? '<button class="button secondary full" data-action="claim-host">Take over as host (host disconnected)</button>' : "")}<div class="note">${icon("shield", 17)} <strong>Keep it comfortable.</strong> Skip anything too personal. Great stories beat embarrassing secrets.</div></section></div><div class="actions-row"><button class="text-button" data-leave>${icon("logout", 16)} ${room.demo ? "Exit demo" : "Leave room"}</button></div></main>${footer()}`;
+    .map(
+      ([v, l]) =>
+        `<option value="${v}" ${(settings.mode ?? "classic") === v ? "selected" : ""}>${l}</option>`,
+    )
+    .join(
+      "",
+    )}</select></div><div class="field-row"><label for="game-length">Game length<small>The total is for the whole room, not per person.</small></label>${
+    room.flowVersion === 2
+      ? `<select id="game-length" data-setting="totalRounds" ${!isHost() ? "disabled" : ""}>${[
+          ...new Set(
+            [
+              3,
+              6,
+              9,
+              12,
+              18,
+              24,
+              room.players.length,
+              room.players.length * 2,
+              room.players.length * 3,
+              settings.totalRounds,
+            ].filter((n) => n >= 3 && n <= 24),
+          ),
+        ]
+          .sort((a, b) => a - b)
+          .map(
+            (n) =>
+              `<option value="${n}" ${settings.totalRounds === n ? "selected" : ""}>${n} rounds total</option>`,
+          )
+          .join("")}</select>`
+      : `<select id="game-length" data-setting="questionsPerPlayer" ${!isHost() ? "disabled" : ""}><option value="1" ${settings.questionsPerPlayer === 1 ? "selected" : ""}>Quick game</option><option value="2" ${settings.questionsPerPlayer === 2 ? "selected" : ""}>Full game</option></select>`
+  }</div></div><p class="settings-note">${gameSummary(settings)} No timers: each step moves on once everyone is ready.<br><br>Correct guess: <strong>+2 points.</strong><br>Someone picks your lie: <strong>+1 point.</strong><br>Nobody spots your truth: <strong>+1 bonus.</strong>${(settings.mode ?? "classic") !== "classic" ? "<br>Each vote for your face-off copy or doodle: <strong>+2 points.</strong>" : ""}</p>${isHost() ? `<button class="button primary full" data-action="start" ${room.players.length < 2 || needsProfiles ? "disabled" : ""}>${icon("play", 18)} ${room.players.length < 2 ? "Waiting for your second player…" : needsProfiles ? "Waiting for player profiles…" : "Start the game"}</button>` : '<div class="note center">Waiting for your host to start the game.</div>' + (room.hostAway ? '<button class="button secondary full" data-action="claim-host">Take over as host (host disconnected)</button>' : "")}<div class="note">${icon("shield", 17)} <strong>Keep it comfortable.</strong> Skip anything too personal. Great stories beat embarrassing secrets.</div></section></div><div class="actions-row"><button class="text-button" data-leave>${icon("logout", 16)} ${room.demo ? "Exit demo" : "Leave room"}</button></div></main>${footer()}`;
 }
 function draftKey() {
-  return "bt-draft-" + session.code;
+  return (
+    "bt-draft-" +
+    session.code +
+    (room?.flowVersion === 2 ? "-" + (room.question?.id ?? "lobby") : "")
+  );
 }
 function getDraft() {
   if (!Object.keys(drafts).length) {
@@ -180,7 +218,8 @@ function timerMarkup() {
   return `<span class="timer" data-timer>${icon("clock", 19)} <span data-countdown>—</span></span>`;
 }
 // How many answer pairs each player needs: one per question they'll be asked.
-const needed = () => room.settings.questionsPerPlayer;
+const needed = () =>
+  room.flowVersion === 2 ? 1 : room.settings.questionsPerPlayer;
 const slotsKey = () => draftKey() + "-slots";
 const filled = (id) =>
   Boolean(drafts[id]?.truth?.trim() || drafts[id]?.lie?.trim()) ||
@@ -190,7 +229,8 @@ function slots() {
   const ids = room.prompts.map((p) => p.id);
   let list = (storage.get(slotsKey()) ?? []).filter((id) => ids.includes(id));
   for (const id of ids.filter(filled)) if (!list.includes(id)) list.push(id);
-  for (const id of ids) if (list.length < needed() && !list.includes(id)) list.push(id);
+  for (const id of ids)
+    if (list.length < needed() && !list.includes(id)) list.push(id);
   list = [...list.filter(filled), ...list.filter((id) => !filled(id))].slice(
     0,
     Math.max(needed(), list.filter(filled).length),
@@ -224,12 +264,16 @@ function answerField(p, kind, d) {
   return `<div class="answer-field"><label class="${kind}-label" for="${id}">${icon(kind === "truth" ? "check" : "eye", 15)} ${kind === "truth" ? "The truth" : "The convincing lie"}</label><textarea id="${id}" data-prompt="${p.id}" data-kind="${kind}" maxlength="120" required aria-describedby="${id}-msg" ${err ? 'aria-invalid="true"' : ""} ${room.submitted ? "disabled" : ""}>${esc(d[p.id]?.[kind] ?? "")}</textarea><div class="field-foot"><span class="field-error" id="${id}-msg" role="alert" ${err ? "" : "hidden"}>${err ? esc(err) : ""}</span><span class="char-count"><span data-count-for="${id}">${(d[p.id]?.[kind] ?? "").length}</span>/120</span></div></div>`;
 }
 function writing() {
+  if (room.flowVersion === 2 && room.question?.playerId !== room.me) {
+    const featured = person(room.question.playerId);
+    return `${header()}<main id="main"><div class="round-path">Round ${room.question.number} of ${room.question.total} · Answer → Vote → Results</div><section class="panel round-wait"><span class="eyebrow">TRUTH & LIES · ANSWERING</span><h1>${esc(featured.name)} is writing their answer.</h1><h2>${esc(room.question.title)}</h2><p>You’ll vote when their truth and lie are ready. No answers needed from you this round.</p><div class="note" role="status">Waiting for ${esc(featured.name)}…</div></section></main>${footer()}`;
+  }
   const d = getDraft(),
     list = slots(),
     prompts = list.map((id) => room.prompts.find((p) => p.id === id)),
     spare = room.prompts.length > list.length,
     n = needed();
-  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">YOUR ANSWER SHEET · KEEP IT TO YOURSELF</span><h1>A little truth.<br>A very good lie.</h1><p>${n === 1 ? "Just one prompt" : `${n} prompts`}: write one real answer and one convincing fake. ${room.promptPack === "extra-silly" ? "Your room has the extra-silly set." : "Picked for your age group."} Short answers work best.</p></div><span class="timer vote-count">${icon("check", 19)} ${room.players.filter((p) => p.ready).length}/${room.players.length} ready</span></div>${demoNote()}${room.needsAnswers ? '<div class="note warning">Time’s up, but someone still needs a complete answer pair. The host can add a minute so everyone gets a turn.</div>' : ""}${room.pausedRemaining !== null ? '<div class="note warning">The host has paused the game. Your saved answers are safe.</div>' : ""}<div class="game-layout"><div><form id="answers-form" novalidate>${prompts
+  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">${room.flowVersion === 2 ? `ROUND ${room.question.number} OF ${room.question.total} · YOUR TURN` : "YOUR ANSWER SHEET · KEEP IT TO YOURSELF"}</span><h1>A little truth.<br>A very good lie.</h1><p>${n === 1 ? "Just one prompt" : `${n} prompts`}: write one real answer and one convincing fake. ${room.flowVersion === 2 ? "Everyone else will guess which is true." : "Short and silly works best."} Short answers work best.</p></div><span class="timer vote-count">${icon("check", 19)} ${room.flowVersion === 2 ? "Answer → Vote → Results" : `${room.players.filter((p) => p.ready).length}/${room.players.length} ready`}</span></div>${demoNote()}${room.needsAnswers ? '<div class="note warning">Time’s up, but someone still needs a complete answer pair. The host can add a minute so everyone gets a turn.</div>' : ""}${room.pausedRemaining !== null ? '<div class="note warning">The host has paused the game. Your saved answers are safe.</div>' : ""}<div class="game-layout"><div><form id="answers-form" novalidate>${prompts
     .map(
       (p, i) =>
         `<section class="panel writing-card"><div class="prompt-heading"><span class="prompt-number">${i + 1}</span><div><h3>${esc(p.title)}</h3><p>${esc(p.hint)}</p></div></div><div class="answer-fields">${answerField(p, "truth", d)}${answerField(p, "lie", d)}</div>${
@@ -249,7 +293,7 @@ function writing() {
     )
     .join(
       "",
-    )}<div class="save-strip"><span class="save-status" id="save-status">${room.submitted ? icon("check", 15) + " Answers ready. Nicely done." : esc(saveMessage)}</span>${room.submitted ? '<button class="button secondary small" type="button" id="edit-answers">Edit answers</button>' : '<button class="button primary" type="submit">' + icon("check", 17) + " Lock in my answers</button>"}</div></form></div><aside class="panel"><div class="panel-title"><h2>How’s everyone doing?</h2></div>${roster()}<div class="note"><strong>A good lie lives close to the truth.</strong> Give it enough detail to sound real. The game adds two more decoys, including an outrageous wildcard.</div>${isHost() ? `<button class="button primary full" data-action="begin" ${room.players.some((p) => p.answerCount === 0) || room.pausedRemaining !== null ? "disabled" : ""}>${"Start now with saved answers"}</button><p class="muted" style="font-size:.75rem;margin-top:12px">The game starts by itself once everyone is ready. Starting early locks everyone’s saved answers.</p>${controls()}` : '<p class="muted" style="font-size:.85rem">The game starts as soon as everyone has locked in their answers.</p>' + controls()}</aside></div></main>${footer()}`;
+    )}<div class="save-strip"><span class="save-status" id="save-status">${room.submitted ? icon("check", 15) + " Answers ready. Nicely done." : esc(saveMessage)}</span>${room.submitted ? '<button class="button secondary small" type="button" id="edit-answers">Edit answers</button>' : '<button class="button primary" type="submit">' + icon("check", 17) + " Submit & open voting</button>"}</div></form></div><aside class="panel"><div class="panel-title"><h2>${room.flowVersion === 2 ? "This round" : "How’s everyone doing?"}</h2></div>${roster()}<div class="note"><strong>A good lie lives close to the truth.</strong> Give it enough detail to sound real. The game adds two more decoys, including an outrageous wildcard.</div>${isHost() && room.flowVersion !== 2 ? `<button class="button primary full" data-action="begin" ${room.players.some((p) => p.answerCount === 0) || room.pausedRemaining !== null ? "disabled" : ""}>${"Start now with saved answers"}</button><p class="muted" style="font-size:.75rem;margin-top:12px">The game starts by itself once everyone is ready. Starting early locks everyone’s saved answers.</p>${controls()}` : '<p class="muted" style="font-size:.85rem">Voting opens as soon as you submit this answer.</p>' + controls()}</aside></div></main>${footer()}`;
 }
 const phaseLabels = {
   reading: "Have a good look",
@@ -376,15 +420,22 @@ function roundResults() {
 }
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 function gameSummary(settings) {
+  if (room.flowVersion === 2) {
+    const n = settings.totalRounds ?? 6,
+      people = room.players.length;
+    const minimum = Math.ceil(n * (1 + people * 0.1)),
+      maximum = Math.ceil(n * (2 + people * 0.15));
+    return `${n} rounds for ${people} players · about ${minimum}–${maximum} minutes. Estimate includes voting and results; chatting can take longer. ${n < people ? "Choose at least " + people + " rounds to feature everyone." : n % people ? "Featured turns rotate; some players get one extra turn." : "Everyone gets the same number of featured turns."}`;
+  }
   const n = room.players.length * settings.questionsPerPlayer,
     mode = settings.mode ?? "classic";
   return mode === "faces"
     ? `${plural(n, "face-off round", "face-off rounds")}.`
     : mode === "doodles"
       ? `${plural(n, "doodle round", "doodle rounds")}.`
-    : mode === "mixed"
-      ? `${plural(n, "truth question", "truth questions")} and ${plural(room.players.length, "face-off or doodle round", "face-off or doodle rounds")}.`
-      : `${plural(n, "question", "questions")}.`;
+      : mode === "mixed"
+        ? `${plural(n, "truth question", "truth questions")} and ${plural(room.players.length, "face-off or doodle round", "face-off or doodle rounds")}.`
+        : `${plural(n, "question", "questions")}.`;
 }
 // ---- Face off: one player pulls a face, everyone copies it, the room votes on the best copy. ----
 let photoCache = { questionId: null, photos: {} },
@@ -405,7 +456,10 @@ async function loadPhotos() {
     if (data.questionId !== room?.question?.id) return;
     photoCache = {
       questionId: data.questionId,
-      photos: { ...(photoCache.questionId === data.questionId ? photoCache.photos : {}), ...data.photos },
+      photos: {
+        ...(photoCache.questionId === data.questionId ? photoCache.photos : {}),
+        ...data.photos,
+      },
     };
     render(true);
   } catch {
@@ -433,7 +487,17 @@ async function shrinkPhoto(file) {
   canvas.width = canvas.height = size;
   canvas
     .getContext("2d")
-    .drawImage(source, (w - side) / 2, (h - side) / 2, side, side, 0, 0, size, size);
+    .drawImage(
+      source,
+      (w - side) / 2,
+      (h - side) / 2,
+      side,
+      side,
+      0,
+      0,
+      size,
+      size,
+    );
   let quality = 0.75,
     data = canvas.toDataURL("image/jpeg", quality);
   while (data.length > 56000 && quality > 0.3)
@@ -514,7 +578,14 @@ const PAD_SIZE = 400,
   ];
 // Strokes live here, not in the canvas, so a screen refresh never wipes a drawing in progress.
 let penDown = false;
-let pad = { questionId: null, strokes: [], colour: PAD_COLOURS[0][0], size: 6, editing: true, error: "" };
+let pad = {
+  questionId: null,
+  strokes: [],
+  colour: PAD_COLOURS[0][0],
+  size: 6,
+  editing: true,
+  error: "",
+};
 // Keep an unfinished drawing on this device, so a refresh or dropped connection doesn't lose it.
 const padKey = (questionId) =>
   `bt-doodle-${session?.code}-${room?.me}-${questionId}`;
@@ -528,7 +599,14 @@ function resetPad(questionId) {
   try {
     strokes = JSON.parse(sessionStorage.getItem(padKey(questionId))) ?? [];
   } catch {}
-  pad = { questionId, strokes, colour: PAD_COLOURS[0][0], size: 6, editing: true, error: "" };
+  pad = {
+    questionId,
+    strokes,
+    colour: PAD_COLOURS[0][0],
+    size: 6,
+    editing: true,
+    error: "",
+  };
 }
 function drawStrokes(ctx) {
   ctx.fillStyle = "#ffffff";
@@ -627,7 +705,9 @@ function padMarkup() {
   return `<div class="doodle-pad-wrap"><canvas id="doodle-pad" width="${PAD_SIZE}" height="${PAD_SIZE}" role="img" aria-label="Drawing pad. Draw with your finger or mouse."></canvas><div class="pad-tools" role="group" aria-label="Drawing tools">${PAD_COLOURS.map(
     ([c, name]) =>
       `<button type="button" class="swatch ${pad.colour === c ? "active" : ""}" data-pad-colour="${c}" style="--swatch:${c}" aria-label="${name}" aria-pressed="${pad.colour === c}"></button>`,
-  ).join("")}<button type="button" class="pad-tool" data-pad-size aria-label="${pad.size > 6 ? "Use thin brush" : "Use thick brush"}">${pad.size > 6 ? "Thick" : "Thin"}</button><button type="button" class="pad-tool" data-pad="undo" aria-label="Undo last line">${icon("undo", 18)}</button><button type="button" class="pad-tool" data-pad="clear" aria-label="Clear drawing">${icon("trash", 18)}</button></div><p class="field-error pad-error" id="pad-error" role="alert" ${pad.error ? "" : "hidden"}>${esc(pad.error)}</p><button class="button primary full photo-button" type="button" data-pad="send" ${photoBusy ? "disabled" : ""}>${icon("check", 20)} ${photoBusy ? "Sending…" : "Send my drawing"}</button></div>`;
+  ).join(
+    "",
+  )}<button type="button" class="pad-tool" data-pad-size aria-label="${pad.size > 6 ? "Use thin brush" : "Use thick brush"}">${pad.size > 6 ? "Thick" : "Thin"}</button><button type="button" class="pad-tool" data-pad="undo" aria-label="Undo last line">${icon("undo", 18)}</button><button type="button" class="pad-tool" data-pad="clear" aria-label="Clear drawing">${icon("trash", 18)}</button></div><p class="field-error pad-error" id="pad-error" role="alert" ${pad.error ? "" : "hidden"}>${esc(pad.error)}</p><button class="button primary full photo-button" type="button" data-pad="send" ${photoBusy ? "disabled" : ""}>${icon("check", 20)} ${photoBusy ? "Sending…" : "Send my drawing"}</button></div>`;
 }
 // Stable but scrambled order for anonymous voting, different each round.
 function hashed(text) {
@@ -636,7 +716,9 @@ function hashed(text) {
   return h;
 }
 function anonymousOrder(ids) {
-  return [...ids].sort((a, b) => hashed(room.question.id + a) - hashed(room.question.id + b));
+  return [...ids].sort(
+    (a, b) => hashed(room.question.id + a) - hashed(room.question.id + b),
+  );
 }
 function doodleScreen() {
   const q = room.question,
@@ -663,7 +745,10 @@ function doodleScreen() {
       myShot && !pad.editing
         ? `<div class="face-mine">${facePhoto(room.me, "Your drawing")}<div><p class="next-status">${icon("check", 17)} Drawing sent. You can change it until everyone’s done.</p><button class="button secondary full" type="button" data-pad="edit">${icon("pencil", 18)} Change my drawing</button></div></div>`
         : `<p class="phase-message center">Everyone draws this, ${q.playerId === room.me ? "you included" : `${esc(featured.name)} included`}. It doesn’t have to be good. It has to be funny.</p>${padMarkup()}`
-    }${waitingChips(room.players.map((p) => p.id).filter((id) => !shots.includes(id)), "STILL DRAWING")}`;
+    }${waitingChips(
+      room.players.map((p) => p.id).filter((id) => !shots.includes(id)),
+      "STILL DRAWING",
+    )}`;
   if (room.phase === "judging") {
     const canJudge = judgeIds().includes(room.me),
       order = anonymousOrder(shots);
@@ -683,12 +768,17 @@ function doodleScreen() {
       .join("")}</div>${
       room.deadline
         ? `<div class="waiting-panel done">${icon("check", 18)}<strong>Everyone has voted. Revealing…</strong></div>`
-        : waitingChips(judgeIds().filter((id) => !(room.votedIds ?? []).includes(id)), "STILL DECIDING")
+        : waitingChips(
+            judgeIds().filter((id) => !(room.votedIds ?? []).includes(id)),
+            "STILL DECIDING",
+          )
     }`;
   }
   if (room.phase === "reveal") {
     const result = room.result,
-      entries = [...result.copies].sort((a, b) => (result.tally[b] ?? 0) - (result.tally[a] ?? 0)),
+      entries = [...result.copies].sort(
+        (a, b) => (result.tally[b] ?? 0) - (result.tally[a] ?? 0),
+      ),
       top = Math.max(0, ...entries.map((id) => result.tally[id] ?? 0)),
       winners = entries.filter((id) => top && (result.tally[id] ?? 0) === top);
     body = `${prompt}<p class="face-headline">${
@@ -706,9 +796,11 @@ function doodleScreen() {
           `doodle ${votes && votes === top ? "winner" : ""}`,
         );
       })
-      .join("")}</div><p class="muted face-rule">Each vote for your drawing: +2</p>${nextPanel()}`;
+      .join(
+        "",
+      )}</div><p class="muted face-rule">Each vote for your drawing: +2</p>${nextPanel()}`;
   }
-  return `${header()}<main id="main" class="question-stage pulse">${demoNote()}<div class="status-banner"><div><span class="eyebrow" style="margin:0 0 5px">ROUND ${q.number} OF ${q.total} · DOODLE OFF</span><strong>${esc(labels[room.phase] ?? "")}</strong></div>${count ? `<span class="timer vote-count">${count}</span>` : ""}</div>${room.pausedRemaining !== null ? '<div class="note warning">Game paused. Take a breath. The host will resume when everyone is ready.</div>' : ""}${profileCard()}<section class="question-card face-card"><div class="question-topline"><div class="subject">${avatar(featured)}<div class="subject-details"><strong>${esc(featured.name)}${q.playerId === room.me ? " (you)" : ""}</strong><small>Starring in this drawing.</small></div></div><span class="pill purple">${icon("pencil", 14)} Doodle off</span></div>${body}${controls()}</section><div class="mini-scoreboard">${[
+  return `${header()}<main id="main" class="question-stage pulse">${demoNote()}<div class="status-banner"><div><span class="eyebrow" style="margin:0 0 5px">ROUND ${q.number} OF ${q.total} · DOODLE OFF</span><strong>${esc(labels[room.phase] ?? "")}</strong></div>${count ? `<span class="timer vote-count">${count}</span>` : ""}</div>${room.pausedRemaining !== null ? '<div class="note warning">Game paused. Take a breath. The host will resume when everyone is ready.</div>' : ""}${room.flowVersion === 2 ? "" : profileCard()}<section class="question-card face-card"><div class="question-topline"><div class="subject">${avatar(featured)}<div class="subject-details"><strong>${esc(featured.name)}${q.playerId === room.me ? " (you)" : ""}</strong><small>Starring in this drawing.</small></div></div><span class="pill purple">${icon("pencil", 14)} Doodle off</span></div>${body}${controls()}</section><div class="mini-scoreboard">${[
     ...room.players,
   ]
     .sort((a, b) => b.score - a.score)
@@ -725,7 +817,9 @@ function faceScreen() {
     shots = room.shotIds ?? [],
     myShot = shots.includes(room.me);
   const labels = {
-    posing: mine ? "Your turn to pull a face" : `${poser.name} is pulling a face`,
+    posing: mine
+      ? "Your turn to pull a face"
+      : `${poser.name} is pulling a face`,
     copying: "Copy that face",
     judging: "Pick the best copy",
     reveal: "And the best copy is…",
@@ -749,7 +843,10 @@ function faceScreen() {
         : myShot
           ? `<div class="face-mine">${facePhoto(room.me, "Your copy")}<div><p class="next-status">${icon("check", 17)} Copy sent. You can retake it until everyone’s in.</p><button class="button secondary full" type="button" data-take-photo ${photoBusy ? "disabled" : ""}>${icon("camera", 18)} ${photoBusy ? "Uploading…" : "Retake my copy"}</button><input type="file" accept="image/*" capture="user" id="photo-input" class="sr-only" tabindex="-1" aria-hidden="true"></div></div>`
           : `<p class="phase-message center">Copy ${esc(poser.name)}’s face as closely as you can, then snap it.</p>${photoButton("Take your copy")}`
-    }${waitingChips(copierIds().filter((id) => !shots.includes(id)), "STILL SNAPPING")}`;
+    }${waitingChips(
+      copierIds().filter((id) => !shots.includes(id)),
+      "STILL SNAPPING",
+    )}`;
   if (room.phase === "judging") {
     const canJudge = judgeIds().includes(room.me);
     body = `<div class="face-target">${facePhoto(q.playerId, `${esc(poser.name)}’s face`, "target")}</div><p class="phase-message center">${canJudge ? "Who copied it best? Tap to vote. You can change your vote until everyone’s in." : "There’s nothing for you to judge this round. Sit back and watch."}</p><div class="face-grid">${copyIds()
@@ -768,12 +865,15 @@ function faceScreen() {
       .join("")}</div>${
       room.deadline
         ? `<div class="waiting-panel done">${icon("check", 18)}<strong>Everyone has voted. Revealing…</strong></div>`
-        : waitingChips(judgeIds().filter((id) => !(room.votedIds ?? []).includes(id)), "STILL DECIDING")
+        : waitingChips(
+            judgeIds().filter((id) => !(room.votedIds ?? []).includes(id)),
+            "STILL DECIDING",
+          )
     }`;
   }
   if (room.phase === "reveal")
     body = `<div class="face-target">${facePhoto(q.playerId, `${esc(poser.name)}’s face`, "target")}</div>${faceResults()}${nextPanel()}`;
-  return `${header()}<main id="main" class="question-stage pulse">${demoNote()}<div class="status-banner"><div><span class="eyebrow" style="margin:0 0 5px">ROUND ${q.number} OF ${q.total} · FACE OFF</span><strong>${esc(labels[room.phase] ?? "")}</strong></div>${count ? `<span class="timer vote-count">${count}</span>` : ""}</div>${room.pausedRemaining !== null ? '<div class="note warning">Game paused. Take a breath. The host will resume when everyone is ready.</div>' : ""}${profileCard()}<section class="question-card face-card"><div class="question-topline"><div class="subject">${avatar(poser)}<div class="subject-details"><strong>${esc(poser.name)}${mine ? " (you)" : ""}</strong><small>Pulls the face. Everyone copies it.</small></div></div><span class="pill purple">${icon("camera", 14)} Face off</span></div>${body}${controls()}</section><div class="mini-scoreboard">${[
+  return `${header()}<main id="main" class="question-stage pulse">${demoNote()}<div class="status-banner"><div><span class="eyebrow" style="margin:0 0 5px">ROUND ${q.number} OF ${q.total} · FACE OFF</span><strong>${esc(labels[room.phase] ?? "")}</strong></div>${count ? `<span class="timer vote-count">${count}</span>` : ""}</div>${room.pausedRemaining !== null ? '<div class="note warning">Game paused. Take a breath. The host will resume when everyone is ready.</div>' : ""}${room.flowVersion === 2 ? "" : profileCard()}<section class="question-card face-card"><div class="question-topline"><div class="subject">${avatar(poser)}<div class="subject-details"><strong>${esc(poser.name)}${mine ? " (you)" : ""}</strong><small>Pulls the face. Everyone copies it.</small></div></div><span class="pill purple">${icon("camera", 14)} Face off</span></div>${body}${controls()}</section><div class="mini-scoreboard">${[
     ...room.players,
   ]
     .sort((a, b) => b.score - a.score)
@@ -804,7 +904,7 @@ function questionScreen() {
             ? "The votes are in. Who knew them best, and who bought the bluff?"
             : `${esc(subject.name)}, tell us what actually happened.`;
   const yourPick = result?.picks.find((p) => p.playerId === room.me);
-  return `${header()}<main id="main" class="question-stage pulse">${demoNote()}<div class="status-banner"><div><span class="eyebrow" style="margin:0 0 5px">QUESTION ${q.number} OF ${q.total}</span><strong>${phaseLabels[room.phase]}</strong></div>${room.phase === "voting" && !room.deadline && room.pausedRemaining === null ? `<span class="timer vote-count">${icon("users", 19)} ${room.votedCount}/${voterCount()}</span>` : room.phase === "reveal" && !room.deadline ? `<span class="timer vote-count">${icon("check", 19)} ${(room.nextReadyIds ?? []).length}/${room.players.length}</span>` : timerMarkup()}</div>${room.pausedRemaining !== null ? '<div class="note warning">Game paused. Take a breath. The host will resume when everyone is ready.</div>' : ""}${profileCard()}<section class="question-card ${room.phase === "voting" ? "is-voting" : ""}"><div class="question-topline"><div class="subject">${avatar(subject)}<div class="subject-details">${room.phase === "voting" ? `<span class="subject-context">${mine ? "This question is about you" : "You’re guessing about"}</span>` : ""}<strong>${esc(subject.name)}${mine ? " (you)" : ""}</strong><small>One truth. Three lies.</small></div></div><span class="pill ${revealed ? "lime" : "purple"}">${icon(revealed ? "check" : "eye", 14)} ${revealed ? "Revealed" : "Spot the truth"}</span></div><h1 class="question-title">${esc(q.title)}</h1><p class="phase-message">${message}</p>${mine && !revealed ? noVoteWarning() : ""}<div class="option-list ${mine && !revealed ? "locked" : ""}">${q.options
+  return `${header()}<main id="main" class="question-stage pulse">${demoNote()}<div class="status-banner"><div><span class="eyebrow" style="margin:0 0 5px">ROUND ${q.number} OF ${q.total} · TRUTH & LIES</span><strong>${phaseLabels[room.phase]}</strong></div>${room.phase === "voting" && !room.deadline && room.pausedRemaining === null ? `<span class="timer vote-count">${icon("users", 19)} ${room.votedCount}/${voterCount()}</span>` : room.phase === "reveal" && !room.deadline ? `<span class="timer vote-count">${icon("check", 19)} ${(room.nextReadyIds ?? []).length}/${room.players.length}</span>` : timerMarkup()}</div>${room.pausedRemaining !== null ? '<div class="note warning">Game paused. Take a breath. The host will resume when everyone is ready.</div>' : ""}${room.flowVersion === 2 ? "" : profileCard()}<section class="question-card ${room.phase === "voting" ? "is-voting" : ""}"><div class="question-topline"><div class="subject">${avatar(subject)}<div class="subject-details">${room.phase === "voting" ? `<span class="subject-context">${mine ? "This question is about you" : "You’re guessing about"}</span>` : ""}<strong>${esc(subject.name)}${mine ? " (you)" : ""}</strong><small>One truth. Three lies.</small></div></div><span class="pill ${revealed ? "lime" : "purple"}">${icon(revealed ? "check" : "eye", 14)} ${revealed ? "Revealed" : "Spot the truth"}</span></div><h1 class="question-title">${esc(q.title)}</h1><p class="phase-message">${message}</p>${mine && !revealed ? noVoteWarning() : ""}<div class="option-list ${mine && !revealed ? "locked" : ""}">${q.options
     .map((o, i) => {
       const truth = result?.truthId === o.id,
         lie = result?.lieId === o.id,
@@ -844,7 +944,7 @@ function finished() {
     bluffers = players.filter((p) => p.fooled === bluffMax),
     correctMax = Math.max(...players.map((p) => p.correct)),
     detectives = players.filter((p) => p.correct === correctMax);
-  return `${header()}<main id="main" class="finished pulse">${demoNote()}<div class="trophy" aria-hidden="true">${icon("trophy", 65)}</div><span class="eyebrow">THE TRUTH HAS SPOKEN.</span><h1>${winners.length > 1 ? "A suspicious tie." : esc(winners[0].name) + " takes it."}</h1><p>${winners.length > 1 ? esc(winners.map((p) => p.name).join(" & ")) + " share the win." : "Good instincts. Excellent company. A few questionable life choices."}</p><div class="victory-share"><button class="button primary" type="button" id="share-victory">${icon("sparkles", 18)} ${winners.some((p) => p.id === room.me) ? "Share your victory" : "Share your result"}</button></div><section class="panel"><div class="panel-title"><h2>The final word</h2><span class="pill lime">${room.history.length} questions</span></div>${players.map((p, i) => `<div class="player-row"><span class="rank">${players.findIndex((x) => x.score === p.score) + 1}</span>${avatar(p)}<div class="player-name">${esc(p.name)}${p.id === room.me ? " <small>You</small>" : ""}</div><span class="points">${p.score}<small>pts</small></span></div>`).join("")}</section><div class="end-actions"><button class="button primary" data-action="replay">${icon("shuffle", 18)} Play again</button><button class="button secondary" data-leave>${icon("logout", 18)} ${room.demo ? "Exit demo" : "Exit room"}</button><p class="muted">Play again takes everyone back to the lobby with fresh questions.</p></div><div class="awards"><div class="award"><small>${icon("eye", 16)} MASTER BLUFFER</small><strong>${bluffMax ? esc(bluffers.map((p) => p.name).join(" & ")) : "Nobody got away with it"}</strong><p>${bluffMax ? bluffMax + (bluffMax === 1 ? " guess fooled." : " guesses fooled.") + " Very convincing." : "The group saw through every lie."}</p></div><div class="award"><small>${icon("sparkles", 16)} HUMAN LIE DETECTOR</small><strong>${correctMax ? esc(detectives.map((p) => p.name).join(" & ")) : "Next time, trust your gut"}</strong><p>${correctMax ? correctMax + (correctMax === 1 ? " truth spotted." : " truths spotted.") + " Impressive instincts." : "Those were some convincing decoys."}</p></div></div><details class="panel history"><summary>Relive the revelations</summary>${room.history.map(({ question: q, result: r }) => ["face", "doodle"].includes(q.type) ? historyFace(q, r) : `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · ${esc(q.title)}</p><strong>${esc(q.options.find((o) => o.id === r?.truthId)?.text)}</strong><small>The lie: ${esc(q.options.find((o) => o.id === r?.lieId)?.text)} · Fooled ${r?.bluffPoints ?? 0}</small></div>`).join("")}</details></main>${footer()}`;
+  return `${header()}<main id="main" class="finished pulse">${demoNote()}<div class="trophy" aria-hidden="true">${icon("trophy", 65)}</div><span class="eyebrow">THE TRUTH HAS SPOKEN.</span><h1>${winners.length > 1 ? "A suspicious tie." : esc(winners[0].name) + " takes it."}</h1><p>${winners.length > 1 ? esc(winners.map((p) => p.name).join(" & ")) + " share the win." : "Good instincts. Excellent company. A few questionable life choices."}</p><div class="victory-share"><button class="button primary" type="button" id="share-victory">${icon("sparkles", 18)} ${winners.some((p) => p.id === room.me) ? "Share your victory" : "Share your result"}</button></div><section class="panel"><div class="panel-title"><h2>The final word</h2><span class="pill lime">${room.history.length} questions</span></div>${players.map((p, i) => `<div class="player-row"><span class="rank">${players.findIndex((x) => x.score === p.score) + 1}</span>${avatar(p)}<div class="player-name">${esc(p.name)}${p.id === room.me ? " <small>You</small>" : ""}</div><span class="points">${p.score}<small>pts</small></span></div>`).join("")}</section><div class="end-actions"><button class="button primary" data-action="replay">${icon("shuffle", 18)} Play again</button><button class="button secondary" data-leave>${icon("logout", 18)} ${room.demo ? "Exit demo" : "Exit room"}</button><p class="muted">Play again takes everyone back to the lobby with fresh questions.</p></div><div class="awards"><div class="award"><small>${icon("eye", 16)} MASTER BLUFFER</small><strong>${bluffMax ? esc(bluffers.map((p) => p.name).join(" & ")) : "Nobody got away with it"}</strong><p>${bluffMax ? bluffMax + (bluffMax === 1 ? " guess fooled." : " guesses fooled.") + " Very convincing." : "The group saw through every lie."}</p></div><div class="award"><small>${icon("sparkles", 16)} HUMAN LIE DETECTOR</small><strong>${correctMax ? esc(detectives.map((p) => p.name).join(" & ")) : "Next time, trust your gut"}</strong><p>${correctMax ? correctMax + (correctMax === 1 ? " truth spotted." : " truths spotted.") + " Impressive instincts." : "Those were some convincing decoys."}</p></div></div><details class="panel history"><summary>Relive the revelations</summary>${room.history.map(({ question: q, result: r }) => (["face", "doodle"].includes(q.type) ? historyFace(q, r) : `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · ${esc(q.title)}</p><strong>${esc(q.options.find((o) => o.id === r?.truthId)?.text)}</strong><small>The lie: ${esc(q.options.find((o) => o.id === r?.lieId)?.text)} · Fooled ${r?.bluffPoints ?? 0}</small></div>`)).join("")}</details></main>${footer()}`;
 }
 function render(force = false) {
   const focused = document.activeElement?.matches("textarea")
@@ -910,7 +1010,12 @@ function render(force = false) {
   }
   updateTimer();
   mountPad();
-  if (room?.phase === "finished" && old && old !== "finished" && old !== "lobby")
+  if (
+    room?.phase === "finished" &&
+    old &&
+    old !== "finished" &&
+    old !== "lobby"
+  )
     celebrate();
   if (room && old && old !== room.phase) {
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -984,9 +1089,21 @@ function accept(data) {
       saveTimer = null;
       storage.remove(draftKey());
     }
+    if (
+      data.room.flowVersion === 2 &&
+      room?.question?.id !== data.room.question?.id
+    ) {
+      drafts = {};
+      draftDirty = false;
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
     room = data.room;
     if (["face", "doodle"].includes(room.question?.type)) loadPhotos();
-    if (room.phase !== "lobby" && room.prompts.length) {
+    if (
+      room.phase !== "lobby" &&
+      (room.prompts.length || room.question?.promptId)
+    ) {
       const previous = storage.get("bt-prompt-history") ?? {};
       const ids = room.prompts.map((p) => p.id);
       const round = room.code + ":" + ids.join(",");
@@ -999,7 +1116,9 @@ function accept(data) {
       if (newRound || newQuestion) {
         const seen = [
           ...(newRound ? ids : []),
-          ...(newQuestion ? [room.question.promptId] : []),
+          ...(newQuestion && room.question.promptId
+            ? [room.question.promptId]
+            : []),
         ];
         history = [
           ...history.filter((id) => !seen.includes(id)),
@@ -1083,6 +1202,7 @@ async function createOrJoin(kind) {
         body: {
           name,
           demo: kind === "demo",
+          flowVersion: 2,
           recentPromptIds: storage.get("bt-prompt-history")?.ids ?? [],
         },
         auth: false,
@@ -1122,7 +1242,8 @@ async function saveAnswers(submitted = false) {
       if (a.lie.length < 2) missing.push(`lie-${a.promptId}`);
     });
     if (missing.length) {
-      for (const id of missing) fieldErrors[id] = fieldMessage(id.split("-")[0]);
+      for (const id of missing)
+        fieldErrors[id] = fieldMessage(id.split("-")[0]);
       render(true);
       const first = $("#" + missing[0]);
       first?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -1263,16 +1384,19 @@ function celebrate() {
   const c = canvas.getContext("2d");
   c.scale(dpr, dpr);
   const colours = ["#d8fa85", "#ffadd1", "#c5a2ff", "#ffb777", "#fff9ed"];
-  const pieces = Array.from({ length: Math.min(160, Math.round(w / 3)) }, () => ({
-    x: w / 2 + (Math.random() - 0.5) * w * 0.3,
-    y: h * 0.35,
-    vx: (Math.random() - 0.5) * 14,
-    vy: -Math.random() * 14 - 6,
-    size: 6 + Math.random() * 6,
-    spin: Math.random() * Math.PI,
-    turn: (Math.random() - 0.5) * 0.3,
-    colour: colours[Math.floor(Math.random() * colours.length)],
-  }));
+  const pieces = Array.from(
+    { length: Math.min(160, Math.round(w / 3)) },
+    () => ({
+      x: w / 2 + (Math.random() - 0.5) * w * 0.3,
+      y: h * 0.35,
+      vx: (Math.random() - 0.5) * 14,
+      vy: -Math.random() * 14 - 6,
+      size: 6 + Math.random() * 6,
+      spin: Math.random() * Math.PI,
+      turn: (Math.random() - 0.5) * 0.3,
+      colour: colours[Math.floor(Math.random() * colours.length)],
+    }),
+  );
   const start = performance.now(),
     life = 2800;
   const frame = (now) => {
@@ -1507,7 +1631,10 @@ document.addEventListener("click", async (e) => {
   } else if (t.matches("[data-pad-size]")) {
     pad.size = pad.size > 6 ? 6 : 14;
     t.textContent = pad.size > 6 ? "Thick" : "Thin";
-    t.setAttribute("aria-label", pad.size > 6 ? "Use thin brush" : "Use thick brush");
+    t.setAttribute(
+      "aria-label",
+      pad.size > 6 ? "Use thin brush" : "Use thick brush",
+    );
   } else if (t.matches("[data-pad]")) {
     const step = t.dataset.pad,
       canvas = $("#doodle-pad");
@@ -1522,8 +1649,7 @@ document.addEventListener("click", async (e) => {
       render(true);
     }
     if (step === "send") sendDrawing();
-  }
-  else if (t.matches("[data-face-vote]"))
+  } else if (t.matches("[data-face-vote]"))
     send("face-vote", {
       playerId: t.dataset.faceVote,
       questionId: room.question.id,

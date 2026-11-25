@@ -1,3 +1,4 @@
+import { enableSimpleFlow } from "./engine.mjs";
 import { createHash } from "node:crypto";
 import {
   newRoom,
@@ -50,6 +51,7 @@ export async function api(
           data.ageGroup === undefined ? null : validateAgeGroup(data.ageGroup),
           data.recentPromptIds,
         );
+        if (data.flowVersion === 2) enableSimpleFlow(room);
         if (await store.create(room))
           return { status: 201, data: { token, room: snapshot(room, token) } };
       }
@@ -69,9 +71,11 @@ export async function api(
             room,
             data.name,
             Date.now(),
-            data.ageGroup === undefined
+            room.flowVersion === 2
               ? null
-              : validateAgeGroup(data.ageGroup),
+              : data.ageGroup === undefined
+                ? null
+                : validateAgeGroup(data.ageGroup),
             data.recentPromptIds,
           );
           room.version++;

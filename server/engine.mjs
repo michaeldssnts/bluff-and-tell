@@ -1,6 +1,7 @@
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import {
   PROMPTS,
+  promptPoolForPlayer,
   AGE_GROUPS,
   promptsForPlayer,
   promptPackForRoom,
@@ -207,7 +208,8 @@ function enter(room, phase, now) {
 // At the reveal, each player taps Next; the room moves on once everyone has.
 function moveOnIfEveryoneReady(room, now) {
   if (room.phase !== "reveal" || room.pausedRemaining !== null) return;
-  if (room.players.every((p) => room.nextReady?.[p.id])) nextQuestion(room, now);
+  if (room.players.every((p) => room.nextReady?.[p.id]))
+    nextQuestion(room, now);
 }
 // Everyone except the player the question is about.
 function votersFor(room) {
@@ -257,7 +259,12 @@ const modeOf = (room) => room.settings.mode ?? "classic";
 const hasChild = (room) => room.players.some((p) => p.ageGroup === "child");
 // A face-off round: one player pulls a face, everyone else copies it, the room votes on the best copy.
 function faceQuestion(p) {
-  return { id: id(), type: "face", playerId: p.id, title: `Copy ${p.name}’s face` };
+  return {
+    id: id(),
+    type: "face",
+    playerId: p.id,
+    title: `Copy ${p.name}’s face`,
+  };
 }
 // A doodle round: everyone draws the same prompt about one player; the room votes for the funniest.
 function doodleQuestion(p, used = new Set()) {
@@ -272,6 +279,54 @@ function doodleQuestion(p, used = new Set()) {
   };
 }
 const isPhotoRound = (q) => ["face", "doodle"].includes(q?.type);
+export function enableSimpleFlow(room) {
+  room.flowVersion = 2;
+  room.settings.mode = room.demo ? "classic" : "mixed";
+  room.settings.totalRounds = 6;
+  room.players.forEach((p) => {
+    p.ageGroup = null;
+  });
+}
+function startSimpleGame(room, now) {
+  const used = new Set(),
+    mode = modeOf(room);
+  const count = room.settings.totalRounds ?? 6;
+  // Shuffle each trio so all three activities appear before a type repeats.
+  const types = [];
+  while (types.length < count) {
+    const trio = shuffle(["truth", "face", "doodle"]);
+    if (trio[0] === types.at(-1)) trio.push(trio.shift());
+    types.push(...trio);
+  }
+  const pool = shuffle(promptPoolForPlayer(room.players[0], room));
+  const recent = new Set(room.players.flatMap((p) => p.promptHistory ?? []));
+  pool.sort((a, b) => Number(recent.has(a.id)) - Number(recent.has(b.id)));
+  let truthIndex = 0;
+  room.queue = Array.from({ length: count }, (_, i) => {
+    const player = room.players[i % room.players.length];
+    const type =
+      mode === "mixed"
+        ? types[i]
+        : mode === "faces"
+          ? "face"
+          : mode === "doodles"
+            ? "doodle"
+            : "truth";
+    if (type === "face") return faceQuestion(player);
+    if (type === "doodle") return doodleQuestion(player, used);
+    const prompt = pool[truthIndex++ % pool.length];
+    return {
+      id: id(),
+      type: "truth",
+      playerId: player.id,
+      promptId: prompt.id,
+      title: prompt.title,
+      options: [],
+    };
+  });
+  room.questionIndex = 0;
+  openQuestion(room, now);
+}
 function startQuestions(room, now) {
   const mode = modeOf(room);
   room.queue = [];
@@ -279,7 +334,9 @@ function startQuestions(room, now) {
   if (mode === "faces" || mode === "doodles") {
     for (let round = 0; round < room.settings.questionsPerPlayer; round++)
       for (const p of room.players)
-        room.queue.push(mode === "faces" ? faceQuestion(p) : doodleQuestion(p, used));
+        room.queue.push(
+          mode === "faces" ? faceQuestion(p) : doodleQuestion(p, used),
+        );
   } else {
     const count = Math.min(
       room.settings.questionsPerPlayer,
@@ -300,7 +357,9 @@ function startQuestions(room, now) {
         if (mode === "mixed" && round === 0) {
           const next = room.players[(i + 1) % room.players.length];
           room.queue.push(
-            i % 2 === 0 && !hasChild(room) ? faceQuestion(next) : doodleQuestion(next, used),
+            i % 2 === 0 && !hasChild(room)
+              ? faceQuestion(next)
+              : doodleQuestion(next, used),
           );
         }
       });
@@ -313,6 +372,30 @@ function openQuestion(room, now) {
   room.votes = {};
   room.shots = {};
   const q = room.queue[room.questionIndex];
+  if (room.flowVersion === 2 && q?.type === "truth") {
+    room.players.forEach((p) => {
+      p.answers = [];
+      p.submitted = false;
+    });
+    const author = room.players.find((p) => p.id === q.playerId);
+    if (author.bot) {
+      const prompt = PROMPTS.find((p) => p.id === q.promptId);
+      const [truth, lie] = shuffle([...prompt.decoys, ...prompt.wildcards]);
+      const questionId = q.id;
+      Object.assign(
+        q,
+        buildQuestion(author, {
+          promptId: prompt.id,
+          truth,
+          lie,
+          decoys: makeDecoys({ promptId: prompt.id, truth, lie }),
+        }),
+        { id: questionId, type: "truth" },
+      );
+      enter(room, "voting", now);
+    } else enter(room, "writing", now);
+    return;
+  }
   enter(
     room,
     q?.type === "face" ? "posing" : q?.type === "doodle" ? "drawing" : "voting",
@@ -391,7 +474,8 @@ function score(room, now) {
     truthId: truth.id,
     lieId: lie.id,
     picks,
-    bluffPoints: picks.filter((p) => p.optionId === lie.id).length * POINTS.fooled,
+    bluffPoints:
+      picks.filter((p) => p.optionId === lie.id).length * POINTS.fooled,
     stumpBonus,
   });
   enter(room, "reveal", now);
@@ -420,7 +504,9 @@ export function tick(room, now = Date.now()) {
   }
   if (room.demo && room.phase === "reveal") {
     room.nextReady ??= {};
-    room.players.filter((p) => p.bot).forEach((p) => (room.nextReady[p.id] = true));
+    room.players
+      .filter((p) => p.bot)
+      .forEach((p) => (room.nextReady[p.id] = true));
   }
   if (!room.deadline) return;
   for (
@@ -470,6 +556,15 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
           room.settings.mode = value;
           continue;
         }
+        if (name === "totalRounds" && room.flowVersion === 2) {
+          const count = Number(value);
+          fail(
+            Number.isInteger(count) && count >= 3 && count <= 24,
+            "Choose 3 to 24 rounds.",
+          );
+          room.settings.totalRounds = count;
+          continue;
+        }
         fail(Object.hasOwn(DEFAULT_SETTINGS, name), "Unknown setting.");
         const n = Number(value);
         fail(Number.isInteger(n), "Choose a whole number.");
@@ -509,6 +604,11 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
         room.players.length >= 2,
         "You need at least 2 players. Invite someone or try the solo demo.",
       );
+      if (room.flowVersion === 2) {
+        room.locked = true;
+        startSimpleGame(room, now);
+        break;
+      }
       fail(
         room.players.every((p) => p.ageGroup !== null),
         "Everyone needs to choose their age group in the room before starting.",
@@ -527,12 +627,18 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       room.promptPack = promptPackForRoom(room);
       if (room.demo) configureDemo(room);
       room.locked = true;
-      if (["faces", "doodles"].includes(room.settings.mode)) startQuestions(room, now);
+      if (["faces", "doodles"].includes(room.settings.mode))
+        startQuestions(room, now);
       else enter(room, "writing", now);
       break;
     case "answers": {
       fail(room.phase === "writing", "The writing phase is over.");
       active();
+      if (room.flowVersion === 2)
+        fail(
+          room.queue[room.questionIndex]?.playerId === me.id,
+          "Only the featured player answers this question.",
+        );
       fail(
         Array.isArray(data.answers) && data.answers.length <= 3,
         "Submit up to three answers.",
@@ -565,6 +671,19 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       });
       fail(me.answers.length > 0, "Add at least one complete pair.");
       me.submitted = Boolean(data.submitted);
+      if (room.flowVersion === 2) {
+        fail(me.answers.length === 1, "Answer the current question only.");
+        if (me.submitted) {
+          const q = room.queue[room.questionIndex],
+            questionId = q.id;
+          Object.assign(q, buildQuestion(me, me.answers[0]), {
+            id: questionId,
+            type: "truth",
+          });
+          enter(room, "voting", now);
+        }
+        break;
+      }
       // Start as soon as everyone has locked in their answers.
       if (room.players.every((p) => p.submitted)) {
         startQuestions(room, now);
@@ -593,6 +712,10 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       host();
       fail(room.phase === "writing", "Not in the writing phase.");
       active();
+      fail(
+        room.flowVersion !== 2,
+        "The featured player must submit their answer.",
+      );
       startQuestions(room, now);
       room.needsAnswers = false;
       break;
@@ -646,7 +769,10 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       );
       active();
       const q = room.queue[room.questionIndex];
-      fail(data.questionId === q.id, "That photo belongs to a previous round. Refresh and try again.");
+      fail(
+        data.questionId === q.id,
+        "That photo belongs to a previous round. Refresh and try again.",
+      );
       const image = String(data.image ?? "");
       fail(
         /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(image) &&
@@ -662,9 +788,13 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
         room.shots[me.id] = image;
         enter(room, "copying", now);
       } else {
-        fail(me.id !== q.playerId, "You’ve already pulled the face. Now watch them copy it.");
+        fail(
+          me.id !== q.playerId,
+          "You’ve already pulled the face. Now watch them copy it.",
+        );
         room.shots[me.id] = image;
-        if (copiersFor(room).every((p) => room.shots[p.id])) openJudging(room, now);
+        if (copiersFor(room).every((p) => room.shots[p.id]))
+          openJudging(room, now);
       }
       break;
     }
@@ -672,7 +802,10 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       fail(room.phase === "judging", "Judging is not open.");
       active();
       const q = room.queue[room.questionIndex];
-      fail(data.questionId === q.id, "That vote belongs to a previous round. Refresh and try again.");
+      fail(
+        data.questionId === q.id,
+        "That vote belongs to a previous round. Refresh and try again.",
+      );
       fail(data.playerId !== me.id, "You can’t vote for your own photo.");
       fail(
         entriesFor(room).includes(data.playerId),
@@ -791,6 +924,7 @@ export function snapshot(room, token, now = Date.now()) {
     demo: room.demo,
     locked: room.locked,
     settings: room.settings,
+    flowVersion: room.flowVersion ?? 1,
     needsAnswers: Boolean(room.needsAnswers),
     ageGroup: me.ageGroup === null ? null : (me.ageGroup ?? "adult"),
     promptPack: promptPackForRoom(room),
@@ -813,10 +947,12 @@ export function snapshot(room, token, now = Date.now()) {
       ready: p.submitted,
       answerCount: p.answers.length,
       bot: p.bot,
-      profileReady: p.ageGroup !== null,
+      profileReady: room.flowVersion === 2 || p.ageGroup !== null,
     })),
     question:
-      q && room.phase !== "writing" && room.phase !== "lobby"
+      q &&
+      (room.phase !== "writing" || room.flowVersion === 2) &&
+      room.phase !== "lobby"
         ? {
             id: q.id,
             playerId: q.playerId,
@@ -860,9 +996,9 @@ export function photosFor(room, token, now = Date.now()) {
       ? [q.playerId, me.id]
       : room.phase === "drawing"
         ? [me.id]
-      : ["judging", "reveal"].includes(room.phase)
-        ? Object.keys(shots)
-        : [];
+        : ["judging", "reveal"].includes(room.phase)
+          ? Object.keys(shots)
+          : [];
   return {
     questionId: q.id,
     photos: Object.fromEntries(

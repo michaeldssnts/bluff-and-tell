@@ -260,6 +260,9 @@ export function normalisePromptHistory(value) {
     .slice(-90);
 }
 export function promptPoolForPlayer(player, room) {
+  // New games share one question bank. Employment history is not required.
+  if (room?.flowVersion === 2)
+    return PROMPTS.filter((p) => p.id !== "first-job");
   if (player.ageGroup === null) return [];
   const age = player.ageGroup ?? "adult";
   if (room && promptPackForRoom(room) === "extra-silly")
@@ -272,6 +275,12 @@ export function promptPoolForPlayer(player, room) {
   );
 }
 export function promptsForPlayer(player, room) {
+  if (room?.flowVersion === 2 && room.phase !== "lobby") {
+    const q = room.queue[room.questionIndex];
+    return room.phase === "writing" && q?.playerId === player.id
+      ? [PROMPTS.find((p) => p.id === q.promptId)].filter(Boolean)
+      : [];
+  }
   if (player.ageGroup === null) return [];
   // Saved games keep their existing prompts until replay; no draft changes mid-game.
   if (!room?.promptSeed || player.ageGroup === undefined) {
