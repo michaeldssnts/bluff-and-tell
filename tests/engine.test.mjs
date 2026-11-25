@@ -45,11 +45,19 @@ function prepared() {
   apply(g.room, g.tokens[0], "begin", {}, at);
   return g;
 }
+// Voting has no timer, so move past it the way a host would: by closing voting.
+function advance(room, hostToken) {
+  if (room.phase === "voting") apply(room, hostToken, "next", {}, at);
+  else tick(room, room.deadline);
+}
 function voting(g, index = 0) {
-  while (g.room.questionIndex < index || g.room.phase !== "voting") {
-    tick(g.room, g.room.deadline);
-  }
+  while (g.room.questionIndex < index || g.room.phase !== "voting")
+    advance(g.room, g.tokens[0]);
   return g;
+}
+function finish(room, hostToken) {
+  for (let i = 0; i < 100 && room.phase !== "finished"; i++)
+    advance(room, hostToken);
 }
 test("rooms have six-character codes and unguessable guest tokens", () => {
   const { room, token } = newRoom("Mia", false, at);
@@ -126,17 +134,23 @@ test("cannot start questions while a player has no complete answer", () => {
 });
 test("pause freezes deadlines, blocks votes, and resume preserves remaining time", () => {
   const g = voting(prepared()),
-    deadline = g.room.deadline;
-  apply(g.room, g.tokens[0], "pause", {}, deadline - 10000);
+    q = g.room.queue[0];
+  g.tokens.forEach((t, i) => {
+    if (g.room.players[i].id !== q.playerId)
+      apply(g.room, t, "vote", { questionId: q.id, optionId: q.options[0].id }, at);
+  });
+  const deadline = g.room.deadline;
+  assert.equal(deadline, at + 3000);
+  apply(g.room, g.tokens[0], "pause", {}, deadline - 1000);
   tick(g.room, deadline + 100000);
   assert.equal(g.room.phase, "voting");
-  assert.equal(g.room.pausedRemaining, 10000);
+  assert.equal(g.room.pausedRemaining, 1000);
   assert.throws(
     () => apply(g.room, g.tokens[1], "vote", {}, deadline),
     /paused/,
   );
   apply(g.room, g.tokens[0], "pause", {}, deadline + 100000);
-  assert.equal(g.room.deadline, deadline + 110000);
+  assert.equal(g.room.deadline, deadline + 101000);
 });
 test("featured players cannot vote; unknown and stale question options are rejected", () => {
   const g = voting(prepared()),
@@ -239,7 +253,9 @@ test("truth earns two points; only the authored lie earns bluff points, exactly 
 test("late votes are rejected and missing votes score zero", () => {
   const g = voting(prepared()),
     q = g.room.queue[0],
-    end = g.room.deadline;
+    end = at + 1000;
+  apply(g.room, g.tokens[0], "next", {}, end);
+  assert.equal(g.room.phase, "reveal");
   assert.throws(
     () =>
       apply(
@@ -253,11 +269,70 @@ test("late votes are rejected and missing votes score zero", () => {
   );
   assert.ok(g.room.players.every((p) => p.score === 0));
 });
-test("timed phases catch up after every client disconnects", () => {
+test("voting has no timer and waits for everyone; other phases still catch up", () => {
   const g = prepared();
+  assert.equal(g.room.deadline, null);
   tick(g.room, at + 3600000);
-  assert.equal(g.room.phase, "finished");
-  assert.equal(g.room.results.length, 3);
+  assert.equal(g.room.phase, "voting");
+  assert.equal(g.room.results.length, 0);
+  assert.throws(() => apply(g.room, g.tokens[0], "extend", {}, at), /No timer/);
+  const q = g.room.queue[0];
+  const voters = g.tokens.filter((_, i) => g.room.players[i].id !== q.playerId);
+  apply(g.room, voters[0], "vote", { questionId: q.id, optionId: q.options[0].id }, at);
+  assert.equal(g.room.deadline, null);
+  assert.deepEqual(snapshot(g.room, g.tokens[0], at).votedIds, [
+    g.room.players[g.tokens.indexOf(voters[0])].id,
+  ]);
+  apply(g.room, voters[1], "vote", { questionId: q.id, optionId: q.options[1].id }, at);
+  assert.equal(g.room.deadline, at + 3000);
+  tick(g.room, at + 3600000);
+  assert.equal(g.room.results.length, 1);
+  assert.equal(g.room.phase, "voting");
+  assert.equal(g.room.questionIndex, 1);
+});
+test("only the host can close voting early", () => {
+  const g = prepared();
+  const notHost = g.tokens[1];
+  assert.throws(() => apply(g.room, notHost, "next", {}, at), /Only the host/);
+  apply(g.room, g.tokens[0], "next", {}, at);
+  assert.equal(g.room.phase, "reveal");
+  assert.equal(g.room.results.length, 1);
+});
+test("demo bots vote straight away so results show without a timer", () => {
+  const { room, token } = newRoom("Robin", true, at, "adult");
+  apply(room, token, "start", {}, at);
+  apply(
+    room,
+    token,
+    "answers",
+    {
+      answers: [
+        { promptId: firstPrompt(room, token), truth: "Cafe", lie: "Zoo" },
+      ],
+      submitted: true,
+    },
+    at,
+  );
+  apply(room, token, "begin", {}, at);
+  let mineSeen = false;
+  for (let i = 0; i < 20 && room.phase !== "finished"; i++) {
+    if (room.phase === "voting") {
+      const q = room.queue[room.questionIndex];
+      if (q.playerId === room.players[0].id) {
+        mineSeen = true;
+        tick(room, at);
+        assert.equal(room.deadline, at + 3000);
+      } else {
+        tick(room, at);
+        assert.equal(room.deadline, null);
+        apply(room, token, "vote", { questionId: q.id, optionId: q.options[0].id }, at);
+        assert.equal(room.deadline, at + 3000);
+      }
+    }
+    tick(room, room.deadline);
+  }
+  assert.ok(mineSeen);
+  assert.equal(room.phase, "finished");
 });
 test("expired and invalid sessions cannot read a room", () => {
   const g = group();
@@ -278,7 +353,7 @@ test("demo is explicitly labelled and its extra players are bots", () => {
 });
 test("replay resets scores, votes, answers and readiness", () => {
   const g = prepared();
-  tick(g.room, at + 3600000);
+  finish(g.room, g.tokens[0]);
   apply(g.room, g.tokens[0], "replay", {}, at + 3600001);
   assert.equal(g.room.phase, "lobby");
   assert.equal(g.room.results.length, 0);
@@ -437,7 +512,7 @@ test("a complete mixed-age game builds and scores questions from all three sets"
   );
   for (const q of room.queue)
     assert.equal(new Set(q.options.map((o) => o.text)).size, 4);
-  tick(room, at + 3600000);
+  finish(room, token);
   assert.equal(room.phase, "finished");
   assert.equal(room.results.length, 3);
 });
@@ -494,8 +569,7 @@ test("a two-player game alternates roles, keeps votes private and scores correct
     );
   apply(room, token, "begin", {}, at);
   assert.equal(room.queue.length, 2);
-  tick(room, room.deadline);
-  tick(room, room.deadline);
+  assert.equal(room.phase, "voting");
   let q = room.queue[0],
     when = room.deadline - 10000;
   const lie = q.options.find((o) => o.kind === "lie"),
@@ -523,8 +597,7 @@ test("a two-player game alternates roles, keeps votes private and scores correct
   apply(room, token, "next", {}, room.deadline - 1);
   apply(room, token, "next", {}, room.deadline - 1);
   assert.equal(room.queue[room.questionIndex].playerId, room.players[1].id);
-  tick(room, room.deadline);
-  tick(room, room.deadline);
+  assert.equal(room.phase, "voting");
   q = room.queue[1];
   when = room.deadline - 10000;
   apply(
@@ -564,8 +637,7 @@ test("the only voter can change their mind before the shortened deadline", () =>
       at,
     );
   apply(room, token, "begin", {}, at);
-  tick(room, room.deadline);
-  tick(room, room.deadline);
+  assert.equal(room.phase, "voting");
   const q = room.queue[0],
     when = room.deadline - 10000;
   apply(
@@ -624,7 +696,7 @@ test("a two-player full game gives each person two questions, including mixed ag
       room.players[1].id,
     ],
   );
-  tick(room, at + 3600000);
+  finish(room, token);
   assert.equal(room.phase, "finished");
   assert.ok(room.players.every((p) => p.score === 0));
 });
@@ -673,7 +745,7 @@ test("all-26-plus rooms get the extra-silly pack and can finish a game", () => {
   }
   apply(room, token, "begin", {}, at);
   assert.equal(room.queue.length, 2);
-  tick(room, at + 3600000);
+  finish(room, token);
   assert.equal(room.phase, "finished");
 });
 test("one younger or unconfirmed player keeps a room on personal age-suitable prompts", () => {
@@ -724,4 +796,14 @@ test("26-plus solo demos include simulated older players and matching silly answ
   );
   apply(room, token, "start", {}, at);
   assert.equal(room.promptPack, "extra-silly");
+});
+
+test("each question opens straight into voting with no read-only pause", () => {
+  const g = prepared();
+  assert.equal(g.room.phase, "voting");
+  assert.equal(g.room.deadline, null);
+  const q = g.room.queue[0];
+  const voter = g.tokens[g.room.players.findIndex((p) => p.id !== q.playerId)];
+  apply(g.room, voter, "vote", { questionId: q.id, optionId: q.options[0].id }, at);
+  assert.equal(snapshot(g.room, voter, at).myVote, q.options[0].id);
 });

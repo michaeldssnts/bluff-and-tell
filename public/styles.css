@@ -2097,3 +2097,55 @@ dialog .eyebrow {
     padding: 14px;
   }
 }
+
+/* Who still needs to vote. Voting has no timer, so this replaces the countdown. */
+.waiting-panel {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px dashed #c5a2ff60;
+  border-radius: 14px;
+  background: #c5a2ff0d;
+}
+.waiting-panel .eyebrow {
+  display: block;
+  margin: 0 0 10px;
+  font-size: 0.7rem;
+}
+.waiting-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.waiting-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border-radius: 999px;
+  background: #ffffff0d;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+.waiting-chip .avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 0.7rem;
+}
+.waiting-panel .muted {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+}
+.waiting-panel.done {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-style: solid;
+  border-color: #d8fa8560;
+  background: #d8fa850d;
+  color: var(--lime);
+}
+.vote-count {
+  gap: 6px;
+  align-items: center;
+}

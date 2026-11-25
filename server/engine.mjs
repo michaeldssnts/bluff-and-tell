@@ -7,13 +7,13 @@ import {
   normalisePromptHistory,
 } from "./prompts.mjs";
 
-export const PHASES = ["reading", "discussion", "voting", "reveal", "story"];
+export const PHASES = ["voting", "reveal", "story"];
 export const DEFAULT_SETTINGS = {
   questionsPerPlayer: 1,
   writing: 360,
   reading: 10,
   discussion: 45,
-  voting: 30,
+  voting: 45,
   reveal: 30,
   story: 60,
 };
@@ -105,7 +105,7 @@ export function newRoom(
       writing: 360,
       reading: 5,
       discussion: 8,
-      voting: 20,
+      voting: 30,
       reveal: 12,
       story: 20,
     };
@@ -168,11 +168,23 @@ export function joinRoom(
 }
 function enter(room, phase, now) {
   room.phase = phase;
+  // Voting has no timer: results show once everyone has voted (or the host closes voting).
   room.deadline =
-    phase === "finished" || phase === "lobby"
+    phase === "finished" || phase === "lobby" || phase === "voting"
       ? null
       : now + room.settings[phase] * 1000;
   room.pausedRemaining = null;
+}
+// Everyone except the player the question is about.
+function votersFor(room) {
+  const q = room.queue[room.questionIndex];
+  return room.players.filter((p) => p.id !== q.playerId);
+}
+// Once every voter has picked, reveal after a short grace so the last voter can still switch.
+function closeIfEveryoneVoted(room, now) {
+  if (room.phase !== "voting" || room.pausedRemaining !== null) return;
+  if (votersFor(room).every((p) => room.votes[p.id]))
+    room.deadline = Math.min(room.deadline ?? Infinity, now + 3000);
 }
 function makeDecoys(answer, previous = []) {
   const prompt = PROMPTS.find((p) => p.id === answer.promptId);
@@ -219,7 +231,8 @@ function startQuestions(room, now) {
       room.queue.push(buildQuestion(p, answerOrder.get(p.id)[round]));
   room.questionIndex = 0;
   room.votes = {};
-  enter(room, "reading", now);
+  // Questions open straight into voting: players read and pick at the same time.
+  enter(room, "voting", now);
 }
 function score(room, now) {
   const q = room.queue[room.questionIndex];
@@ -253,20 +266,22 @@ function nextQuestion(room, now) {
   room.questionIndex++;
   room.votes = {};
   if (room.questionIndex >= room.queue.length) enter(room, "finished", now);
-  else enter(room, "reading", now);
+  else enter(room, "voting", now);
 }
 export function tick(room, now = Date.now()) {
-  if (room.pausedRemaining !== null || !room.deadline) return;
+  if (room.pausedRemaining !== null) return;
   if (room.demo && room.phase === "voting") {
     const q = room.queue[room.questionIndex];
-    room.players
-      .filter((p) => p.bot && p.id !== q.playerId)
+    votersFor(room)
+      .filter((p) => p.bot)
       .forEach((p, i) => {
         if (!room.votes[p.id])
           room.votes[p.id] =
             q.options[(i + room.questionIndex) % q.options.length].id;
       });
+    closeIfEveryoneVoted(room, now);
   }
+  if (!room.deadline) return;
   for (
     let safety = 0;
     safety < 200 && room.deadline && now >= room.deadline;
@@ -427,18 +442,20 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
         "Choose an option from this question.",
       );
       room.votes[me.id] = data.optionId;
-      if (Object.keys(room.votes).length === room.players.length - 1)
-        room.deadline = Math.min(room.deadline, now + 3000);
+      closeIfEveryoneVoted(room, now);
       break;
     }
     case "next":
       host();
       active();
       fail(
-        ["reading", "discussion", "reveal", "story"].includes(room.phase),
+        ["reading", "discussion", "voting", "reveal", "story"].includes(
+          room.phase,
+        ),
         "Wait for this phase to finish.",
       );
-      if (room.phase === "reading") enter(room, "discussion", now);
+      if (room.phase === "voting") score(room, now);
+      else if (room.phase === "reading") enter(room, "discussion", now);
       else if (room.phase === "discussion") enter(room, "voting", now);
       else if (room.phase === "reveal") enter(room, "story", now);
       else nextQuestion(room, now);
@@ -446,7 +463,7 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
     case "extend":
       host();
       fail(
-        room.phase !== "lobby" && room.phase !== "finished",
+        !["lobby", "finished", "voting"].includes(room.phase),
         "No timer to extend.",
       );
       if (room.pausedRemaining !== null) room.pausedRemaining += 60000;
@@ -582,6 +599,7 @@ export function snapshot(room, token, now = Date.now()) {
         : null,
     myVote: room.votes[me.id] ?? null,
     votedCount: Object.keys(room.votes).length,
+    votedIds: room.phase === "voting" ? Object.keys(room.votes) : [],
     result,
     history:
       room.phase === "finished"
