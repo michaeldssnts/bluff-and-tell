@@ -2149,3 +2149,34 @@ dialog .eyebrow {
   gap: 6px;
   align-items: center;
 }
+
+/* Writing sheet: inline errors sit beside the character count, so nothing jumps. */
+.field-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 4px;
+  min-height: 1.1rem;
+}
+.field-foot .char-count {
+  margin: 0 0 0 auto;
+  flex-shrink: 0;
+}
+.field-error {
+  color: var(--danger);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+textarea[aria-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+}
+.swap-prompt {
+  margin-top: 14px;
+  font-size: 0.85rem;
+}
+.swap-prompt[hidden] {
+  display: none;
+}

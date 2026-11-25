@@ -8,9 +8,12 @@ import {
 } from "./prompts.mjs";
 
 export const PHASES = ["voting", "reveal", "story"];
+// Scoring: spot the truth +2; the featured player gets +1 per friend fooled by their lie,
+// and +1 if at least one person voted and nobody spotted their truth.
+export const POINTS = { truth: 2, fooled: 1, stumped: 1 };
 export const DEFAULT_SETTINGS = {
   questionsPerPlayer: 1,
-  writing: 360,
+  writing: 180,
   reading: 10,
   discussion: 45,
   voting: 45,
@@ -102,7 +105,7 @@ export function newRoom(
   if (demo) {
     room.settings = {
       questionsPerPlayer: 1,
-      writing: 360,
+      writing: 180,
       reading: 5,
       discussion: 8,
       voting: 30,
@@ -244,21 +247,28 @@ function score(room, now) {
     const p = room.players.find((p) => p.id === playerId),
       correct = optionId === truth.id;
     if (correct) {
-      p.score += 2;
+      p.score += POINTS.truth;
       p.correct++;
     }
     if (optionId === lie.id) {
-      subject.score++;
+      subject.score += POINTS.fooled;
       subject.fooled++;
     }
-    return { playerId, optionId, points: correct ? 2 : 0 };
+    return { playerId, optionId, points: correct ? POINTS.truth : 0 };
   });
+  // Nobody spotted the truth: reward the featured player even if nobody fell for the lie itself.
+  const stumpBonus =
+    picks.length && !picks.some((p) => p.optionId === truth.id)
+      ? POINTS.stumped
+      : 0;
+  subject.score += stumpBonus;
   room.results.push({
     questionId: q.id,
     truthId: truth.id,
     lieId: lie.id,
     picks,
-    bluffPoints: picks.filter((p) => p.optionId === lie.id).length,
+    bluffPoints: picks.filter((p) => p.optionId === lie.id).length * POINTS.fooled,
+    stumpBonus,
   });
   enter(room, "reveal", now);
 }

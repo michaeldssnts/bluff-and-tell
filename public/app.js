@@ -125,7 +125,7 @@ function home() {
   return `${header()}<main id="main"><section class="hero"><div class="hero-copy"><span class="pill lime">${icon("sparkles", 15)} THE TRUTH IS A PARTY GAME.</span><h1>Your friends.<br>Their secrets.<br><em>Big laughs.</em></h1><p class="hero-hook">One truth. Three lies.<br>A whole lot of “NO WAY!”</p><p>From date night to game night, find out how well you <strong>really</strong> know your people.</p><div class="hero-facts"><span>${icon("users", 16)} 2–8 players</span><span>${icon("phone", 16)} Any phone</span><span>${icon("check", 16)} No download</span></div></div><div class="entry-wrap"><div class="floating-card" aria-hidden="true"><small>WAIT. THAT’S ACTUALLY TRUE?</small><p>“You did <em>WHAT?!</em>”</p></div><span class="party-spark" aria-hidden="true">✳</span><section class="entry-card" aria-labelledby="entry-title"><span class="entry-kicker">GOOD COMPANY. BAD POKER FACES.</span><h2 id="entry-title">${inviteCode ? "You’re invited. Bring your best bluff." : "Bring your suspicious side."}</h2><p>${inviteCode ? `Room ${esc(inviteCode)} is already filled in. Choose a nickname to join.` : "A few truths. Some terrible lies. Your kind of people."}</p><form id="entry-form"><label for="nickname">What should we call you?</label><input id="nickname" name="name" placeholder="Your nickname" value="${esc(homeName)}" maxlength="22" minlength="2" autocomplete="nickname" required><button class="button primary full" type="submit" id="create-button">${icon(inviteCode ? "users" : "plus")} ${inviteCode ? "Join this room" : "Create a game"}</button><div class="divider">${inviteCode ? "YOUR ROOM CODE" : "GOT AN INVITE?"}</div><div class="join-row"><label for="room-code" class="sr-only">Six-character room code</label><input id="room-code" name="code" placeholder="ROOM CODE" aria-label="Six-character room code" value="${esc(inviteCode)}" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false">${inviteCode ? "" : '<button type="button" class="button secondary" id="join-button">Join game</button>'}</div></form><button class="text-button demo-button" id="demo-button">${icon("play", 15)} Just curious? Try a solo demo</button><p class="entry-foot">${icon("lock", 13)} Private rooms. No accounts. Just your people.</p></section></div></section><section class="how-strip" aria-label="How it works"><div class="how-item"><span class="how-icon">${icon("users", 22)}</span><div><h3>Round up your suspects.</h3><p>Share a room code. Everyone joins on their own phone.</p></div></div><div class="how-item"><span class="how-icon">${icon("eye", 22)}</span><div><h3>Spill it. Then bluff it.</h3><p>Answer prompts about yourself. Make the lie convincing.</p></div></div><div class="how-item"><span class="how-icon">${icon("sparkles", 22)}</span><div><h3>Guess. Gasp. Repeat.</h3><p>Pick the truth, catch the bluff, and enjoy the reveal.</p></div></div></section></main>${footer()}`;
 }
 function roster(showScore = false) {
-  return `<div class="player-list">${room.players.map((p) => `<div class="player-row">${avatar(p)}<div class="player-name">${esc(p.name)}${p.id === room.me ? " <small>You" + (p.id === room.hostId ? " · Host" : "") + "</small>" : p.id === room.hostId ? "<small>Host</small>" : p.bot ? "<small>Demo player</small>" : ""}</div>${showScore ? `<span class="points">${p.score}<small>pts</small></span>` : room.phase === "writing" ? `<span class="player-meta ${p.ready ? "ready" : ""}">${p.ready ? icon("check", 15) + " Ready" : p.answerCount + "/3 saved"}</span>` : isHost() && p.id !== room.me && !p.bot ? `<button class="icon-button" data-remove="${p.id}" aria-label="Remove ${esc(p.name)}">×</button>` : `<span class="player-meta">${p.profileReady === false ? "Choosing profile" : "Joined"}</span>`}</div>`).join("")}</div>`;
+  return `<div class="player-list">${room.players.map((p) => `<div class="player-row">${avatar(p)}<div class="player-name">${esc(p.name)}${p.id === room.me ? " <small>You" + (p.id === room.hostId ? " · Host" : "") + "</small>" : p.id === room.hostId ? "<small>Host</small>" : p.bot ? "<small>Demo player</small>" : ""}</div>${showScore ? `<span class="points">${p.score}<small>pts</small></span>` : room.phase === "writing" ? `<span class="player-meta ${p.ready ? "ready" : ""}">${p.ready ? icon("check", 15) + " Ready" : Math.min(p.answerCount, needed()) + "/" + needed() + " saved"}</span>` : isHost() && p.id !== room.me && !p.bot ? `<button class="icon-button" data-remove="${p.id}" aria-label="Remove ${esc(p.name)}">×</button>` : `<span class="player-meta">${p.profileReady === false ? "Choosing profile" : "Joined"}</span>`}</div>`).join("")}</div>`;
 }
 function controls() {
   if (!isHost())
@@ -150,7 +150,7 @@ function roomProfile() {
 function lobby() {
   const settings = room.settings;
   const needsProfiles = room.players.some((p) => p.profileReady === false);
-  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">GOOD COMPANY. QUESTIONABLE ANSWERS.</span><h1>The room is yours.</h1><p>${isHost() ? "Invite your friends, set the mood, and get ready to question everything." : "You’re in. Make yourself comfortable while your host gets everyone together."}</p></div><span class="pill lime">${icon("users", 16)} ${room.players.length}/8 players</span></div>${demoNote()}${roomProfile()}<div class="game-layout"><div><section class="room-invite"><span class="eyebrow">YOUR INVITE CODE</span><div class="room-code">${esc(room.code)}</div><p>Open this website on another phone and enter the code.</p><div class="invite-actions"><button class="button" data-copy-link>${icon("link", 15)} Copy invite link</button><button class="button secondary" data-copy-code>${icon("copy", 15)} Copy code</button></div></section><section class="panel"><div class="panel-title"><h2>Your people</h2>${isHost() ? `<button class="text-button" data-action="lock">${icon("lock", 15)} ${room.locked ? "Unlock lobby" : "Lock lobby"}</button>` : ""}</div>${roster()}${room.players.length < 8 ? `<div class="empty-slot"><span class="avatar">+</span>${room.players.length === 2 ? "Two is all you need. Start whenever you’re ready." : "There’s room for more questionable characters."}</div>` : ""}</section></div><section class="panel"><div class="panel-title"><h2>${icon("shuffle", 19)} Set the vibe</h2><span class="pill purple">${isHost() ? "Host controls" : "Game settings"}</span></div><div class="settings-grid"><div class="field-row"><label for="game-length">Game length<small>Everyone gets an equal turn.</small></label><select id="game-length" data-setting="questionsPerPlayer" ${!isHost() ? "disabled" : ""}><option value="1" ${settings.questionsPerPlayer === 1 ? "selected" : ""}>Quick game</option><option value="2" ${settings.questionsPerPlayer === 2 ? "selected" : ""}>Full game</option></select></div><div class="field-row"><label for="writing-time">Writing time<small>Three truths. Three lies.</small></label><select id="writing-time" data-setting="writing" ${!isHost() ? "disabled" : ""}>${[240, 360, 480, 600].map((v) => `<option value="${v}" ${settings.writing === v ? "selected" : ""}>${v / 60} minutes</option>`).join("")}</select></div></div><p class="settings-note">${room.players.length * settings.questionsPerPlayer} questions · voting closes when everyone has picked · ${settings.reveal}s reveal · up to ${settings.story}s for the real story.<br><br>Correct guess: <strong>+2 points.</strong><br>Someone picks your lie: <strong>+1 point.</strong></p>${isHost() ? `<button class="button primary full" data-action="start" ${room.players.length < 2 || needsProfiles ? "disabled" : ""}>${icon("play", 18)} ${room.players.length < 2 ? "Waiting for your second player…" : needsProfiles ? "Waiting for player profiles…" : "Let the bluffing begin"}</button>` : '<div class="note center">Waiting for your host to start the game.</div>' + (room.hostAway ? '<button class="button secondary full" data-action="claim-host">Host disconnected · Take over</button>' : "")}<div class="note">${icon("shield", 17)} <strong>Keep it comfortable.</strong> Skip anything too personal. Great stories beat embarrassing secrets.</div></section></div><div class="actions-row"><button class="text-button" data-leave>${icon("logout", 16)} ${room.demo ? "Exit demo" : "Leave room"}</button></div></main>${footer()}`;
+  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">GOOD COMPANY. QUESTIONABLE ANSWERS.</span><h1>The room is yours.</h1><p>${isHost() ? "Invite your friends, set the mood, and get ready to question everything." : "You’re in. Make yourself comfortable while your host gets everyone together."}</p></div><span class="pill lime">${icon("users", 16)} ${room.players.length}/8 players</span></div>${demoNote()}${roomProfile()}<div class="game-layout"><div><section class="room-invite"><span class="eyebrow">YOUR INVITE CODE</span><div class="room-code">${esc(room.code)}</div><p>Open this website on another phone and enter the code.</p><div class="invite-actions"><button class="button" data-copy-link>${icon("link", 15)} Copy invite link</button><button class="button secondary" data-copy-code>${icon("copy", 15)} Copy code</button></div></section><section class="panel"><div class="panel-title"><h2>Your people</h2>${isHost() ? `<button class="text-button" data-action="lock">${icon("lock", 15)} ${room.locked ? "Unlock lobby" : "Lock lobby"}</button>` : ""}</div>${roster()}${room.players.length < 8 ? `<div class="empty-slot"><span class="avatar">+</span>${room.players.length === 2 ? "Two is all you need. Start whenever you’re ready." : "There’s room for more questionable characters."}</div>` : ""}</section></div><section class="panel"><div class="panel-title"><h2>${icon("shuffle", 19)} Set the vibe</h2><span class="pill purple">${isHost() ? "Host controls" : "Game settings"}</span></div><div class="settings-grid"><div class="field-row"><label for="game-length">Game length<small>Everyone gets an equal turn.</small></label><select id="game-length" data-setting="questionsPerPlayer" ${!isHost() ? "disabled" : ""}><option value="1" ${settings.questionsPerPlayer === 1 ? "selected" : ""}>Quick game</option><option value="2" ${settings.questionsPerPlayer === 2 ? "selected" : ""}>Full game</option></select></div><div class="field-row"><label for="writing-time">Writing time<small>One truth and one lie per question.</small></label><select id="writing-time" data-setting="writing" ${!isHost() ? "disabled" : ""}>${[120, 180, 300, 480].map((v) => `<option value="${v}" ${settings.writing === v ? "selected" : ""}>${v / 60} minutes</option>`).join("")}</select></div></div><p class="settings-note">${room.players.length * settings.questionsPerPlayer} questions · voting closes when everyone has picked · ${settings.reveal}s reveal · up to ${settings.story}s for the real story.<br><br>Correct guess: <strong>+2 points.</strong><br>Someone picks your lie: <strong>+1 point.</strong><br>Nobody spots your truth: <strong>+1 bonus.</strong></p>${isHost() ? `<button class="button primary full" data-action="start" ${room.players.length < 2 || needsProfiles ? "disabled" : ""}>${icon("play", 18)} ${room.players.length < 2 ? "Waiting for your second player…" : needsProfiles ? "Waiting for player profiles…" : "Let the bluffing begin"}</button>` : '<div class="note center">Waiting for your host to start the game.</div>' + (room.hostAway ? '<button class="button secondary full" data-action="claim-host">Host disconnected · Take over</button>' : "")}<div class="note">${icon("shield", 17)} <strong>Keep it comfortable.</strong> Skip anything too personal. Great stories beat embarrassing secrets.</div></section></div><div class="actions-row"><button class="text-button" data-leave>${icon("logout", 16)} ${room.demo ? "Exit demo" : "Leave room"}</button></div></main>${footer()}`;
 }
 function draftKey() {
   return "bt-draft-" + session.code;
@@ -166,12 +166,64 @@ function getDraft() {
 function timerMarkup() {
   return `<span class="timer" data-timer>${icon("clock", 19)} <span data-countdown>—</span></span>`;
 }
+// How many answer pairs each player needs: one per question they'll be asked.
+const needed = () => room.settings.questionsPerPlayer;
+const slotsKey = () => draftKey() + "-slots";
+const filled = (id) =>
+  Boolean(drafts[id]?.truth?.trim() || drafts[id]?.lie?.trim()) ||
+  room.ownAnswers.some((a) => a.promptId === id);
+// The prompts this player is answering. Starts with any they've already written, then fills from the offered prompts.
+function slots() {
+  const ids = room.prompts.map((p) => p.id);
+  let list = (storage.get(slotsKey()) ?? []).filter((id) => ids.includes(id));
+  for (const id of ids.filter(filled)) if (!list.includes(id)) list.push(id);
+  for (const id of ids) if (list.length < needed() && !list.includes(id)) list.push(id);
+  list = [...list.filter(filled), ...list.filter((id) => !filled(id))].slice(
+    0,
+    Math.max(needed(), list.filter(filled).length),
+  );
+  storage.set(slotsKey(), list);
+  return list;
+}
+function swapPrompt(id) {
+  const list = slots(),
+    ids = room.prompts.map((p) => p.id),
+    unused = ids.filter((x) => !list.includes(x));
+  if (!unused.length || filled(id)) return;
+  // Cycle through the offered prompts so "different question" never repeats the one you just skipped.
+  const after = ids.slice(ids.indexOf(id) + 1).concat(ids);
+  const next = after.find((x) => unused.includes(x));
+  list[list.indexOf(id)] = next;
+  storage.set(slotsKey(), list);
+  delete fieldErrors["truth-" + id];
+  delete fieldErrors["lie-" + id];
+  render(true);
+  $(`#truth-${next}`)?.focus();
+}
+const fieldErrors = {};
+const fieldMessage = (kind) =>
+  kind === "truth"
+    ? "Add the real answer to finish this pair."
+    : "Add a convincing lie to finish this pair.";
+function answerField(p, kind, d) {
+  const id = `${kind}-${p.id}`,
+    err = fieldErrors[id];
+  return `<div class="answer-field"><label class="${kind}-label" for="${id}">${icon(kind === "truth" ? "check" : "eye", 15)} ${kind === "truth" ? "The truth" : "The convincing lie"}</label><textarea id="${id}" data-prompt="${p.id}" data-kind="${kind}" maxlength="120" required placeholder="${kind === "truth" ? "Something that really happened…" : "Something they might believe…"}" aria-describedby="${id}-msg" ${err ? 'aria-invalid="true"' : ""} ${room.submitted ? "disabled" : ""}>${esc(d[p.id]?.[kind] ?? "")}</textarea><div class="field-foot"><span class="field-error" id="${id}-msg" role="alert" ${err ? "" : "hidden"}>${err ? esc(err) : ""}</span><span class="char-count"><span data-count-for="${id}">${(d[p.id]?.[kind] ?? "").length}</span>/120</span></div></div>`;
+}
 function writing() {
-  const d = getDraft();
-  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">YOUR ANSWER SHEET · KEEP IT TO YOURSELF</span><h1>A little truth.<br>A very good lie.</h1><p>Answer each prompt with one real answer and one convincing fake. ${room.promptPack === "extra-silly" ? "Your room has the extra-silly set. Bring on the ridiculous real stories." : "These prompts are picked for your age group."} Short answers work best. You can skip a prompt—save at least one complete pair.</p></div>${timerMarkup()}</div>${demoNote()}${room.needsAnswers ? '<div class="note warning">Time’s up, but someone still needs a complete answer pair. The host can add a minute so everyone gets a turn.</div>' : ""}${room.pausedRemaining !== null ? '<div class="note warning">The host has paused the game. Your saved answers are safe.</div>' : ""}<div class="game-layout"><div><form id="answers-form">${room.prompts
+  const d = getDraft(),
+    list = slots(),
+    prompts = list.map((id) => room.prompts.find((p) => p.id === id)),
+    spare = room.prompts.length > list.length,
+    n = needed();
+  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">YOUR ANSWER SHEET · KEEP IT TO YOURSELF</span><h1>A little truth.<br>A very good lie.</h1><p>${n === 1 ? "Just one prompt" : `${n} prompts`}: write one real answer and one convincing fake. ${room.promptPack === "extra-silly" ? "Your room has the extra-silly set." : "Picked for your age group."} Short answers work best.</p></div>${timerMarkup()}</div>${demoNote()}${room.needsAnswers ? '<div class="note warning">Time’s up, but someone still needs a complete answer pair. The host can add a minute so everyone gets a turn.</div>' : ""}${room.pausedRemaining !== null ? '<div class="note warning">The host has paused the game. Your saved answers are safe.</div>' : ""}<div class="game-layout"><div><form id="answers-form" novalidate>${prompts
     .map(
       (p, i) =>
-        `<section class="panel writing-card"><div class="prompt-heading"><span class="prompt-number">${i + 1}</span><div><h3>${esc(p.title)}</h3><p>${esc(p.hint)}</p></div></div><div class="answer-fields"><div><label class="truth-label" for="truth-${p.id}">${icon("check", 15)} The truth</label><textarea id="truth-${p.id}" data-prompt="${p.id}" data-kind="truth" maxlength="120" placeholder="Something that really happened…" ${room.submitted ? "disabled" : ""}>${esc(d[p.id]?.truth ?? "")}</textarea><div class="char-count"><span data-count-for="truth-${p.id}">${(d[p.id]?.truth ?? "").length}</span>/120</div></div><div><label class="lie-label" for="lie-${p.id}">${icon("eye", 15)} The convincing lie</label><textarea id="lie-${p.id}" data-prompt="${p.id}" data-kind="lie" maxlength="120" placeholder="Something they might believe…" ${room.submitted ? "disabled" : ""}>${esc(d[p.id]?.lie ?? "")}</textarea><div class="char-count"><span data-count-for="lie-${p.id}">${(d[p.id]?.lie ?? "").length}</span>/120</div></div></div>${
+        `<section class="panel writing-card"><div class="prompt-heading"><span class="prompt-number">${i + 1}</span><div><h3>${esc(p.title)}</h3><p>${esc(p.hint)}</p></div></div><div class="answer-fields">${answerField(p, "truth", d)}${answerField(p, "lie", d)}</div>${
+          !room.submitted && spare && !filled(p.id)
+            ? `<button class="text-button swap-prompt" type="button" data-swap="${p.id}">${icon("shuffle", 15)} Try a different question</button>`
+            : ""
+        }${
           room.ownAnswers.find((a) => a.promptId === p.id)?.decoys
             ? `<div class="decoy-review"><strong>Your extra decoys</strong><p>Both should be untrue about you. Swap them if either could also be correct.</p><div class="decoy-options">${room.ownAnswers
                 .find((a) => a.promptId === p.id)
@@ -215,7 +267,9 @@ function roundPoints(playerId) {
   const pick = result.picks.find((p) => p.playerId === playerId);
   return (
     (pick?.points ?? 0) +
-    (playerId === room.question.playerId ? result.bluffPoints : 0)
+    (playerId === room.question.playerId
+      ? result.bluffPoints + (result.stumpBonus ?? 0)
+      : 0)
   );
 }
 function rankOf(p) {
@@ -229,6 +283,21 @@ function profileCard() {
 }
 function noVoteWarning() {
   return `<div class="no-vote-warning" role="status">${icon("alert", 24)}<div><strong>You can’t vote on your own question</strong><p>${room.phase === "voting" ? "Everyone else is voting now. Keep a straight face while they guess." : "When voting opens, everyone else picks. Your job is to keep a straight face."}</p></div></div>`;
+}
+// What the featured player hears about their own question.
+function ownResult(result) {
+  const fooled = result.picks.filter((p) => p.optionId === result.lieId).length,
+    total = result.bluffPoints + (result.stumpBonus ?? 0),
+    pts = `+${total} ${total === 1 ? "point" : "points"} for you.`;
+  if (result.stumpBonus && fooled)
+    return `Your lie fooled <strong>${fooled} ${fooled === 1 ? "person" : "people"}</strong> and nobody spotted your truth. ${pts}`;
+  if (result.stumpBonus)
+    return `<strong>Nobody spotted your truth.</strong> ${pts}`;
+  if (fooled)
+    return `Your lie fooled <strong>${fooled} ${fooled === 1 ? "person" : "people"}</strong>. ${pts}`;
+  return result.picks.length
+    ? "They saw right through it."
+    : "Nobody voted on this one.";
 }
 function roundResults() {
   const q = room.question,
@@ -261,12 +330,17 @@ function roundResults() {
     subject,
     "The bluffer",
     "bluffer",
-    fooled.length
-      ? `Their lie fooled ${fooled.join(" & ")}`
-      : "Nobody fell for their lie",
-    result.bluffPoints,
+    [
+      fooled.length
+        ? `Their lie fooled ${fooled.join(" & ")}`
+        : "Nobody fell for their lie",
+      result.stumpBonus ? "nobody spotted their truth (+1 bonus)" : "",
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    result.bluffPoints + (result.stumpBonus ?? 0),
   );
-  return `<section class="round-results" aria-labelledby="round-results-title"><div class="round-results-head"><h2 id="round-results-title">Points this round</h2><span class="muted">Truth +2 · Each friend fooled +1</span></div>${bluffer}${voters}</section>`;
+  return `<section class="round-results" aria-labelledby="round-results-title"><div class="round-results-head"><h2 id="round-results-title">Points this round</h2><span class="muted">Truth +2 · Each friend fooled +1 · Nobody spots the truth +1</span></div>${bluffer}${voters}</section>`;
 }
 function questionScreen() {
   const q = room.question,
@@ -299,7 +373,7 @@ function questionScreen() {
     })
     .join(
       "",
-    )}</div>${room.phase === "voting" ? `<div class="vote-status"><span class="${room.myVote ? "confirmed" : ""}">${mine ? icon("lock", 15) + " Voting is locked for you" : room.myVote ? icon("check", 15) + " Vote saved. You can change it until the reveal." : "Your vote is still open."}</span><span>${room.votedCount}/${voterCount()} voted</span></div>${waitingPanel()}` : ""}${result ? `<div class="result-callout"><p>${mine ? `Your lie fooled <strong>${result.bluffPoints} ${result.bluffPoints === 1 ? "person" : "people"}</strong>. ${result.bluffPoints ? "+" + result.bluffPoints + (result.bluffPoints === 1 ? " point" : " points") + " for you." : "They saw right through it."}` : yourPick?.points ? "<strong>+2 points!</strong> You spotted the truth." : yourPick ? "That one got you. No points this time." : "You missed this vote. There’s always the next one."}</p></div>${roundResults()}` : ""}${room.phase === "story" ? `<div class="story-callout">${icon("sparkles", 25)}<h3>There’s definitely a story here.</h3><p>${esc(subject.name)}, the room is listening.</p></div>` : ""}${controls()}</section><div class="mini-scoreboard">${[
+    )}</div>${room.phase === "voting" ? `<div class="vote-status"><span class="${room.myVote ? "confirmed" : ""}">${mine ? icon("lock", 15) + " Voting is locked for you" : room.myVote ? icon("check", 15) + " Vote saved. You can change it until the reveal." : "Your vote is still open."}</span><span>${room.votedCount}/${voterCount()} voted</span></div>${waitingPanel()}` : ""}${result ? `<div class="result-callout"><p>${mine ? `${ownResult(result)}` : yourPick?.points ? "<strong>+2 points!</strong> You spotted the truth." : yourPick ? "That one got you. No points this time." : "You missed this vote. There’s always the next one."}</p></div>${roundResults()}` : ""}${room.phase === "story" ? `<div class="story-callout">${icon("sparkles", 25)}<h3>There’s definitely a story here.</h3><p>${esc(subject.name)}, the room is listening.</p></div>` : ""}${controls()}</section><div class="mini-scoreboard">${[
     ...room.players,
   ]
     .sort((a, b) => b.score - a.score)
@@ -571,10 +645,10 @@ async function createOrJoin(kind) {
   }
 }
 function collectAnswers() {
-  return room.prompts.map((p) => ({
-    promptId: p.id,
-    truth: (drafts[p.id]?.truth ?? "").trim(),
-    lie: (drafts[p.id]?.lie ?? "").trim(),
+  return slots().map((id) => ({
+    promptId: id,
+    truth: (drafts[id]?.truth ?? "").trim(),
+    lie: (drafts[id]?.lie ?? "").trim(),
   }));
 }
 async function saveAnswers(submitted = false) {
@@ -583,19 +657,23 @@ async function saveAnswers(submitted = false) {
   if (!room || room.phase !== "writing") return;
   const all = collectAnswers(),
     answers = all.filter((a) => a.truth.length >= 2 && a.lie.length >= 2);
-  if (
-    submitted &&
-    all.some(
-      (a) => (a.truth || a.lie) && !(a.truth.length >= 2 && a.lie.length >= 2),
-    )
-  ) {
-    toast("Complete both the truth and lie, or clear that prompt to skip it.");
-    return;
+  if (submitted) {
+    // Every pair on screen is used in the game, so all of them need both halves.
+    const missing = [];
+    all.forEach((a) => {
+      if (a.truth.length < 2) missing.push(`truth-${a.promptId}`);
+      if (a.lie.length < 2) missing.push(`lie-${a.promptId}`);
+    });
+    if (missing.length) {
+      for (const id of missing) fieldErrors[id] = fieldMessage(id.split("-")[0]);
+      render(true);
+      const first = $("#" + missing[0]);
+      first?.scrollIntoView({ block: "center", behavior: "smooth" });
+      first?.focus({ preventScroll: true });
+      return;
+    }
   }
-  if (!answers.length) {
-    if (submitted) toast("Write at least one complete truth and lie.");
-    return;
-  }
+  if (!answers.length) return;
   if (busy) {
     saveTimer = setTimeout(() => saveAnswers(submitted), 500);
     return;
@@ -739,8 +817,12 @@ document.addEventListener("input", (e) => {
     e.target.value = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, "");
   if (e.target.matches("textarea[data-prompt]")) {
     const { prompt, kind } = e.target.dataset;
+    clearFieldError(e.target);
     drafts[prompt] ??= {};
     drafts[prompt][kind] = e.target.value;
+    // Once you've started answering, swapping the question would throw that away, so hide the option.
+    const swap = $(`[data-swap="${prompt}"]`);
+    if (swap) swap.hidden = filled(prompt);
     storage.set(draftKey(), drafts);
     draftDirty = true;
     const count = $(`[data-count-for="${e.target.id}"]`);
@@ -751,6 +833,36 @@ document.addEventListener("input", (e) => {
     saveTimer = setTimeout(() => saveAnswers(false), 1200);
   }
 });
+function clearFieldError(el) {
+  if (!fieldErrors[el.id]) return;
+  delete fieldErrors[el.id];
+  el.removeAttribute("aria-invalid");
+  const msg = $(`#${el.id}-msg`);
+  if (msg) {
+    msg.hidden = true;
+    msg.textContent = "";
+  }
+}
+// Validate on blur: only flag a box once its partner has something in it, so skipping ahead never shows red.
+document.addEventListener(
+  "blur",
+  (e) => {
+    if (!e.target.matches?.("textarea[data-prompt]") || room?.submitted) return;
+    const { prompt, kind } = e.target.dataset,
+      other = kind === "truth" ? "lie" : "truth",
+      mine = e.target.value.trim(),
+      theirs = (drafts[prompt]?.[other] ?? "").trim();
+    if (mine.length >= 2 || !theirs) return;
+    fieldErrors[e.target.id] = fieldMessage(kind);
+    e.target.setAttribute("aria-invalid", "true");
+    const msg = $(`#${e.target.id}-msg`);
+    if (msg) {
+      msg.hidden = false;
+      msg.textContent = fieldErrors[e.target.id];
+    }
+  },
+  true,
+);
 document.addEventListener("change", (e) => {
   if (e.target.id === "social-format") {
     prepareRecommendationCard();
@@ -786,6 +898,7 @@ document.addEventListener("click", async (e) => {
   else if (t.id === "join-button") createOrJoin("join");
   else if (t.id === "demo-button") createOrJoin("demo");
   else if (t.matches("[data-action]")) send(t.dataset.action).catch(() => {});
+  else if (t.matches("[data-swap]")) swapPrompt(t.dataset.swap);
   else if (t.matches("[data-reroll]"))
     send("reroll", { promptId: t.dataset.reroll }).catch(() => {});
   else if (t.matches("[data-option]"))

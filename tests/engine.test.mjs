@@ -590,9 +590,10 @@ test("a two-player game alternates roles, keeps votes private and scores correct
   assert.equal(snapshot(room, token, when).myVote, null);
   assert.equal(snapshot(room, token, when).result, null);
   tick(room, room.deadline);
+  // Fooled one person (+1) and nobody spotted the truth (+1).
   assert.deepEqual(
     room.players.map((p) => p.score),
-    [1, 0],
+    [2, 0],
   );
   apply(room, token, "next", {}, room.deadline - 1);
   apply(room, token, "next", {}, room.deadline - 1);
@@ -613,7 +614,7 @@ test("a two-player game alternates roles, keeps votes private and scores correct
   tick(room, room.deadline);
   assert.deepEqual(
     room.players.map((p) => p.score),
-    [3, 0],
+    [4, 0],
   );
   apply(room, token, "next", {}, room.deadline - 1);
   apply(room, token, "next", {}, room.deadline - 1);
@@ -806,4 +807,39 @@ test("each question opens straight into voting with no read-only pause", () => {
   const voter = g.tokens[g.room.players.findIndex((p) => p.id !== q.playerId)];
   apply(g.room, voter, "vote", { questionId: q.id, optionId: q.options[0].id }, at);
   assert.equal(snapshot(g.room, voter, at).myVote, q.options[0].id);
+});
+
+test("the featured player gets a bonus when nobody spots their truth", () => {
+  const scoreFor = (pickKinds) => {
+    const g = prepared(),
+      q = g.room.queue[0],
+      subject = g.room.players.findIndex((p) => p.id === q.playerId),
+      voters = g.tokens.filter((_, i) => i !== subject);
+    pickKinds.forEach((kind, i) =>
+      apply(
+        g.room,
+        voters[i],
+        "vote",
+        { questionId: q.id, optionId: q.options.find((o) => o.kind === kind).id },
+        at,
+      ),
+    );
+    apply(g.room, g.tokens[0], "next", {}, at);
+    return { subject: g.room.players[subject].score, result: g.room.results[0] };
+  };
+  // Both picked decoys: nobody fooled by the lie, but nobody spotted the truth either.
+  let r = scoreFor(["decoy", "wildcard"]);
+  assert.equal(r.subject, 1);
+  assert.equal(r.result.stumpBonus, 1);
+  // One fell for the lie, one picked a decoy: +1 fooled, +1 bonus.
+  r = scoreFor(["lie", "decoy"]);
+  assert.equal(r.subject, 2);
+  // Someone spotted the truth: no bonus.
+  r = scoreFor(["truth", "lie"]);
+  assert.equal(r.subject, 1);
+  assert.equal(r.result.stumpBonus, 0);
+  // Nobody voted at all: no bonus.
+  r = scoreFor([]);
+  assert.equal(r.subject, 0);
+  assert.equal(r.result.stumpBonus, 0);
 });

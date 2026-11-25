@@ -11,7 +11,7 @@ A party game for 2–8 players. Share real answers, invent convincing lies, and 
 3. Pick the truth from four options: one truth and three lies.
 4. Enjoy the reveal, hear the real story, and see who knows the group best.
 
-Correct guesses earn 2 points. Each person who picks your own lie earns you 1 point.
+Correct guesses earn 2 points. Each person who picks your own lie earns you 1 point, and you get a 1-point bonus if nobody spots your truth.
 
 ## Features
 
