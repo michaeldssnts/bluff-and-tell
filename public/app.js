@@ -25,6 +25,7 @@ const icons = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   wifi: '<path d="M2 8a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0m-11 4a6 6 0 0 1 8 0m-4 4h.01"/>',
   logout: '<path d="M9 5H4v14h5m6-14 7 7-7 7m-7-7h14"/>',
+  alert: '<path d="M12 3 2 20h20zM12 10v4m0 3h.01"/>',
 };
 const icon = (name, size = 18) =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] ?? icons.sparkles}</svg>`;
@@ -192,6 +193,67 @@ const phaseLabels = {
   reveal: "The truth comes out",
   story: "Okay. We need the story.",
 };
+const letter = (i) => String.fromCharCode(65 + i);
+// Points a player earned on the question being revealed: +2 for the truth, +1 per friend fooled.
+function roundPoints(playerId) {
+  const result = room.result;
+  if (!result) return 0;
+  const pick = result.picks.find((p) => p.playerId === playerId);
+  return (
+    (pick?.points ?? 0) +
+    (playerId === room.question.playerId ? result.bluffPoints : 0)
+  );
+}
+function rankOf(p) {
+  return room.players.filter((x) => x.score > p.score).length + 1;
+}
+function profileCard() {
+  const p = me();
+  if (!p) return "";
+  const delta = room.result ? roundPoints(p.id) : null;
+  return `<section class="my-profile" aria-label="Your profile">${avatar(p)}<div class="my-profile-name"><span class="eyebrow">YOUR PROFILE</span><strong>${esc(p.name)}</strong><small>Rank ${rankOf(p)} of ${room.players.length} · ${p.correct} ${p.correct === 1 ? "truth" : "truths"} spotted · ${p.fooled} fooled</small></div><div class="my-profile-score">${delta !== null ? `<span class="delta ${delta ? "up" : ""}">+${delta} this round</span>` : ""}<span class="points">${p.score}<small>pts</small></span></div></section>`;
+}
+function noVoteWarning() {
+  return `<div class="no-vote-warning" role="status">${icon("alert", 24)}<div><strong>You can’t vote on your own question</strong><p>${room.phase === "voting" ? "Everyone else is voting now. Keep a straight face while they guess." : "When voting opens, everyone else picks. Your job is to keep a straight face."}</p></div></div>`;
+}
+function roundResults() {
+  const q = room.question,
+    result = room.result,
+    subject = person(q.playerId),
+    optionLabel = (id) => {
+      const i = q.options.findIndex((o) => o.id === id);
+      return i < 0 ? "" : `${letter(i)}. ${esc(q.options[i].text)}`;
+    },
+    fooled = result.picks
+      .filter((p) => p.optionId === result.lieId)
+      .map((p) => esc(person(p.playerId)?.name ?? "Player")),
+    row = (p, tag, tagClass, detail, pts) =>
+      `<div class="round-row">${avatar(p)}<div class="round-who"><strong>${esc(p.name)}${p.id === room.me ? " <small>You</small>" : ""}</strong><span class="round-tag ${tagClass}">${tag}</span>${detail ? `<span class="round-pick">${detail}</span>` : ""}</div><span class="round-points ${pts ? "up" : ""}">+${pts}</span></div>`;
+  const voters = room.players
+    .filter((p) => p.id !== q.playerId)
+    .map((p) => {
+      const pick = result.picks.find((x) => x.playerId === p.id);
+      if (!pick) return row(p, "Didn’t vote", "none", "", 0);
+      const kind =
+        pick.optionId === result.truthId
+          ? ["Spotted the truth", "truth"]
+          : pick.optionId === result.lieId
+            ? [`Fell for ${esc(subject.name)}’s lie`, "lie"]
+            : ["Picked a decoy", "decoy"];
+      return row(p, kind[0], kind[1], optionLabel(pick.optionId), pick.points);
+    })
+    .join("");
+  const bluffer = row(
+    subject,
+    "The bluffer",
+    "bluffer",
+    fooled.length
+      ? `Their lie fooled ${fooled.join(" & ")}`
+      : "Nobody fell for their lie",
+    result.bluffPoints,
+  );
+  return `<section class="round-results" aria-labelledby="round-results-title"><div class="round-results-head"><h2 id="round-results-title">Points this round</h2><span class="muted">Truth +2 · Each friend fooled +1</span></div>${bluffer}${voters}</section>`;
+}
 function questionScreen() {
   const q = room.question,
     subject = person(q.playerId),
@@ -205,13 +267,13 @@ function questionScreen() {
         ? "Debate it out loud. The featured player is allowed to bluff."
         : room.phase === "voting"
           ? mine
-            ? "You know the truth. Sit this vote out and watch them guess."
+            ? "Your friends are choosing between these four answers."
             : "Pick the true answer. Your choice stays private until the reveal."
           : room.phase === "reveal"
             ? "The votes are in. Who knew them best—and who bought the bluff?"
             : `${esc(subject.name)}, tell us what actually happened.`;
   const yourPick = result?.picks.find((p) => p.playerId === room.me);
-  return `${header()}<main id="main" class="question-stage pulse">${demoNote()}<div class="status-banner"><div><span class="eyebrow" style="margin:0 0 5px">QUESTION ${q.number} OF ${q.total}</span><strong>${phaseLabels[room.phase]}</strong></div>${timerMarkup()}</div>${room.pausedRemaining !== null ? '<div class="note warning">Game paused. Take a breath. The host will resume when everyone is ready.</div>' : ""}<section class="question-card ${room.phase === "voting" ? "is-voting" : ""}"><div class="question-topline"><div class="subject">${avatar(subject)}<div class="subject-details">${room.phase === "voting" ? `<span class="subject-context">${mine ? "This question is about you" : "You’re guessing about"}</span>` : ""}<strong>${esc(subject.name)}${mine ? " (you)" : ""}</strong><small>One truth. Three lies.</small></div></div><span class="pill ${revealed ? "lime" : "purple"}">${icon(revealed ? "check" : "eye", 14)} ${revealed ? "Revealed" : "Spot the truth"}</span></div><h1 class="question-title">${esc(q.title)}</h1><p class="phase-message">${message}</p><div class="option-list">${q.options
+  return `${header()}<main id="main" class="question-stage pulse">${demoNote()}<div class="status-banner"><div><span class="eyebrow" style="margin:0 0 5px">QUESTION ${q.number} OF ${q.total}</span><strong>${phaseLabels[room.phase]}</strong></div>${timerMarkup()}</div>${room.pausedRemaining !== null ? '<div class="note warning">Game paused. Take a breath. The host will resume when everyone is ready.</div>' : ""}${profileCard()}<section class="question-card ${room.phase === "voting" ? "is-voting" : ""}"><div class="question-topline"><div class="subject">${avatar(subject)}<div class="subject-details">${room.phase === "voting" ? `<span class="subject-context">${mine ? "This question is about you" : "You’re guessing about"}</span>` : ""}<strong>${esc(subject.name)}${mine ? " (you)" : ""}</strong><small>One truth. Three lies.</small></div></div><span class="pill ${revealed ? "lime" : "purple"}">${icon(revealed ? "check" : "eye", 14)} ${revealed ? "Revealed" : "Spot the truth"}</span></div><h1 class="question-title">${esc(q.title)}</h1><p class="phase-message">${message}</p>${mine && !revealed ? noVoteWarning() : ""}<div class="option-list ${mine && !revealed ? "locked" : ""}">${q.options
     .map((o, i) => {
       const truth = result?.truthId === o.id,
         lie = result?.lieId === o.id,
@@ -219,15 +281,18 @@ function questionScreen() {
         selected = room.myVote === o.id,
         votable =
           room.phase === "voting" && !mine && room.pausedRemaining === null;
-      return `<${votable ? "button" : "div"} class="option ${selected ? "selected" : ""} ${truth ? "correct" : ""} ${lie ? "lie" : ""}" ${votable ? `type="button" data-option="${o.id}" aria-pressed="${selected}"` : ""}><span class="letter">${String.fromCharCode(65 + i)}</span><span class="option-body">${esc(o.text)}${revealed ? `<span class="option-detail">${truth ? "THE TRUTH" : lie ? esc(subject.name.toUpperCase()) + "’S LIE" : "DECOY"} · ${picks.length} ${picks.length === 1 ? "vote" : "votes"}</span>${picks.length ? `<span class="option-tags">${picks.map((p) => `<span class="mini-tag">${esc(person(p.playerId)?.name ?? "Player")}${p.points ? " +2" : ""}</span>`).join("")}</span>` : ""}` : ""}</span>${truth ? icon("check", 22) : selected ? icon("check", 19) : ""}</${votable ? "button" : "div"}>`;
+      return `<${votable ? "button" : "div"} class="option ${selected ? "selected" : ""} ${truth ? "correct" : ""} ${lie ? "lie" : ""}" ${votable ? `type="button" data-option="${o.id}" aria-pressed="${selected}"` : ""}><span class="letter">${letter(i)}</span><span class="option-body">${esc(o.text)}${revealed ? `<span class="option-detail">${truth ? "THE TRUTH" : lie ? esc(subject.name.toUpperCase()) + "’S LIE" : "DECOY"} · ${picks.length} ${picks.length === 1 ? "vote" : "votes"}</span>${picks.length ? `<span class="option-tags">${picks.map((p) => `<span class="mini-tag">${esc(person(p.playerId)?.name ?? "Player")}${p.points ? " +2" : ""}</span>`).join("")}</span>` : ""}` : ""}</span>${truth ? icon("check", 22) : selected ? icon("check", 19) : mine && !revealed ? `<span class="option-lock" aria-hidden="true">${icon("lock", 17)}</span>` : ""}</${votable ? "button" : "div"}>`;
     })
     .join(
       "",
-    )}</div>${room.phase === "voting" ? `<div class="vote-status"><span class="${room.myVote ? "confirmed" : ""}">${mine ? "You’re the featured player" : room.myVote ? icon("check", 15) + " Vote saved. You can change it." : "Your vote is still open."}</span><span>${room.votedCount}/${room.players.length - 1} voted</span></div>` : ""}${result ? `<div class="result-callout"><p>${mine ? `Your lie fooled <strong>${result.bluffPoints} ${result.bluffPoints === 1 ? "person" : "people"}</strong>. ${result.bluffPoints ? "+" + result.bluffPoints + " points for you." : "They saw right through it."}` : yourPick?.points ? "<strong>+2 points!</strong> You spotted the truth." : yourPick ? "That one got you. No points this time." : "You missed this vote. There’s always the next one."}</p></div>` : ""}${room.phase === "story" ? `<div class="story-callout">${icon("sparkles", 25)}<h3>There’s definitely a story here.</h3><p>${esc(subject.name)}, the room is listening.</p></div>` : ""}${controls()}</section><div class="mini-scoreboard">${[
+    )}</div>${room.phase === "voting" ? `<div class="vote-status"><span class="${room.myVote ? "confirmed" : ""}">${mine ? icon("lock", 15) + " Voting is locked for you" : room.myVote ? icon("check", 15) + " Vote saved. You can change it." : "Your vote is still open."}</span><span>${room.votedCount}/${room.players.length - 1} voted</span></div>` : ""}${result ? `<div class="result-callout"><p>${mine ? `Your lie fooled <strong>${result.bluffPoints} ${result.bluffPoints === 1 ? "person" : "people"}</strong>. ${result.bluffPoints ? "+" + result.bluffPoints + (result.bluffPoints === 1 ? " point" : " points") + " for you." : "They saw right through it."}` : yourPick?.points ? "<strong>+2 points!</strong> You spotted the truth." : yourPick ? "That one got you. No points this time." : "You missed this vote. There’s always the next one."}</p></div>${roundResults()}` : ""}${room.phase === "story" ? `<div class="story-callout">${icon("sparkles", 25)}<h3>There’s definitely a story here.</h3><p>${esc(subject.name)}, the room is listening.</p></div>` : ""}${controls()}</section><div class="mini-scoreboard">${[
     ...room.players,
   ]
     .sort((a, b) => b.score - a.score)
-    .map((p) => `<span>${esc(p.name)}<b>${p.score}</b></span>`)
+    .map((p) => {
+      const delta = roundPoints(p.id);
+      return `<span>${esc(p.name)}<b>${p.score}</b>${delta ? `<i class="delta up">+${delta}</i>` : ""}</span>`;
+    })
     .join(
       "",
     )}</div>${room.demo ? '<div class="center"><button class="text-button" data-exit-demo>Exit solo demo</button></div>' : ""}</main>${footer()}`;
