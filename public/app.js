@@ -119,7 +119,7 @@ function header() {
   return `<header class="site-header"><a class="wordmark" href="/" ${room ? "data-game-home" : ""}><span class="mark" aria-hidden="true"><b>BT</b></span>BLUFF <b>&</b> TELL</a><div class="header-right">${room ? `<span class="pill ${room.demo ? "pink" : "lime"}">${room.demo ? "SOLO DEMO" : `ROOM ${esc(room.code)}`}</span>` : '<span class="pill">A party in your pocket</span>'}${room?.demo ? '<button class="text-button" data-exit-demo>Exit demo</button>' : ""}<button class="text-button" data-help>${icon("help")}<span>How to play</span></button></div></header>`;
 }
 function footer() {
-  return `<footer class="site-footer"><span>Know your friends. Believe nothing.</span><div class="footer-links"><span id="connection-status">${connected ? "Made for your people." : "Connection lost. Reconnecting…"}</span><button class="text-button" data-recommend>Recommend Bluff &amp; Tell</button><button class="text-button" data-privacy>Privacy</button></div></footer>`;
+  return `<footer class="site-footer"><div class="footer-game-meta">${questionProgress()}<span>Know your friends. Believe nothing.</span></div><div class="footer-links"><span id="connection-status">${connected ? "Made for your people." : "Connection lost. Reconnecting…"}</span><button class="text-button" data-recommend>Recommend Bluff &amp; Tell</button><button class="text-button" data-privacy>Privacy</button></div></footer>`;
 }
 function demoNote() {
   if (room.demo && room.flowVersion === 2 && room.phase !== "lobby")
@@ -161,7 +161,7 @@ function lobby() {
   const needsProfiles =
     room.flowVersion !== 2 &&
     room.players.some((p) => p.profileReady === false);
-  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">GOOD COMPANY. QUESTIONABLE ANSWERS.</span><h1>The room is yours.</h1><p>${isHost() ? "Grab your people. Pick your chaos. Let’s go." : "You’re in. Your host is rounding up the suspects."}</p></div><span class="pill lime">${icon("users", 16)} ${room.players.length}/8 players</span></div>${demoNote()}${room.flowVersion === 2 ? '<ol class="flow-steps" aria-label="How each round works"><li>Play</li><li>Vote</li><li>Reveal</li><li>Repeat</li></ol>' : roomProfile()}<div class="game-layout"><div><section class="room-invite"><span class="eyebrow">YOUR INVITE CODE</span><div class="room-code">${esc(room.code)}</div><p>One phone each. Send them the link.</p><div class="invite-actions"><button class="button" data-copy-link>${icon("link", 15)} Copy invite link</button><button class="button secondary" data-copy-code>${icon("copy", 15)} Copy code</button></div></section><section class="panel"><div class="panel-title"><h2>Your people</h2>${isHost() ? `<button class="text-button" data-action="lock">${icon("lock", 15)} ${room.locked ? "Unlock lobby" : "Lock lobby"}</button>` : ""}</div>${roster()}${room.players.length < 8 ? `<div class="empty-slot"><span class="avatar">+</span>${room.players.length === 2 ? "Two is all you need. Start whenever you’re ready." : "There’s room for more questionable characters."}</div>` : ""}</section></div><section class="panel"><div class="panel-title"><h2>${icon("shuffle", 19)} Set the vibe</h2><span class="pill purple">${isHost() ? "Host controls" : "Game settings"}</span></div><div class="settings-grid"><div class="field-row"><label for="game-mode">Game type<small>${room.demo ? "Demo bots can bluff. Cameras? Not so much." : "Truths, silly faces, doodles. Photos need your camera."}</small></label><select id="game-mode" data-mode ${!isHost() || room.demo ? "disabled" : ""}>${[
+  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">GOOD COMPANY. QUESTIONABLE ANSWERS.</span><h1>The room is yours.</h1><p>${isHost() ? "Grab your people. Pick your chaos. Let’s go." : "You’re in. Your host is rounding up the suspects."}</p></div><span class="pill lime">${icon("users", 16)} ${room.players.length}/8 players</span></div>${demoNote()}${room.flowVersion === 2 ? "" : roomProfile()}<div class="game-layout"><div><section class="room-invite"><span class="eyebrow">YOUR INVITE CODE</span><div class="room-code">${esc(room.code)}</div><p>One phone each. Send them the link.</p><div class="invite-actions"><button class="button" data-copy-link>${icon("link", 15)} Copy invite link</button><button class="button secondary" data-copy-code>${icon("copy", 15)} Copy code</button></div></section><section class="panel"><div class="panel-title"><h2>Your people</h2>${isHost() ? `<button class="text-button" data-action="lock">${icon("lock", 15)} ${room.locked ? "Unlock lobby" : "Lock lobby"}</button>` : ""}</div>${roster()}${room.players.length < 8 ? `<div class="empty-slot"><span class="avatar">+</span>${room.players.length === 2 ? "Two is all you need. Start whenever you’re ready." : "There’s room for more questionable characters."}</div>` : ""}</section></div><section class="panel"><div class="panel-title"><h2>${icon("shuffle", 19)} Set the vibe</h2><span class="pill purple">${isHost() ? "Host controls" : "Game settings"}</span></div><div class="settings-grid"><div class="field-row"><label for="game-mode">Game type<small>${room.demo ? "Demo bots can bluff. Cameras? Not so much." : "Truths, silly faces, doodles. Photos need your camera."}</small></label><select id="game-mode" data-mode ${!isHost() || room.demo ? "disabled" : ""}>${[
     ["classic", "Truth & lies"],
     ["faces", "Face off (photos)"],
     ["doodles", "Doodle off (drawing)"],
@@ -927,13 +927,8 @@ function finished() {
 function questionProgress() {
   const q = room?.question;
   if (!q || ["lobby", "finished"].includes(room.phase)) return "";
-  const { completed, remaining, total } = progressState(q, room.phase);
-  const step = ["reveal", "story"].includes(room.phase)
-    ? "Reveal"
-    : ["voting", "judging"].includes(room.phase)
-      ? "Vote"
-      : "Play";
-  return `<section class="question-progress" aria-label="Game progress"><div class="progress-top"><div class="question-number"><span>QUESTION</span><strong>${q.number}<small> / ${total}</small></strong></div><span class="progress-step">${step === "Reveal" ? "The receipts are in" : step === "Vote" ? "Time to judge" : "Make some mischief"}</span></div><progress value="${completed}" max="${total}" aria-label="Questions completed">${completed} of ${total}</progress><div class="progress-bottom"><span>${completed} done · ${remaining} to go</span><span>${["Play", "Vote", "Reveal"].map((label) => `<span class="${label === step ? "active" : ""}" ${label === step ? 'aria-current="step"' : ""}>${label}</span>`).join(" → ")}</span></div></section>`;
+  const { completed, total } = progressState(q, room.phase);
+  return `<span class="footer-question-count" aria-label="Game progress">Question <strong>${q.number} / ${total}</strong> · ${completed} done</span>`;
 }
 function render(force = false) {
   const focused = document.activeElement?.matches("textarea")
@@ -990,7 +985,6 @@ function render(force = false) {
           ? finished()
           : questionScreen()
     : home();
-  $("main", app)?.insertAdjacentHTML("afterbegin", questionProgress());
   if (focused && old === room?.phase) {
     const field = document.getElementById(focused.id);
     if (field && !field.disabled) {
