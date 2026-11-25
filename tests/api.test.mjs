@@ -1,4 +1,5 @@
 import test from "node:test";
+import { promptPoolForPlayer } from "../server/prompts.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -203,7 +204,11 @@ test("create and join store each player's age group and return tailored prompts"
     ageGroup: "teen",
   });
   assert.equal(joined.status, 200);
-  assert.ok(joined.data.room.prompts.some((p) => p.id === "school-subject"));
+  assert.equal(joined.data.room.prompts.length, 3);
+  const allowed = new Set(
+    promptPoolForPlayer({ ageGroup: "teen" }).map((p) => p.id),
+  );
+  assert.ok(joined.data.room.prompts.every((p) => allowed.has(p.id)));
   const restored = await call(base, "GET", null, created.data.token);
   assert.equal(restored.data.room.ageGroup, "child");
   assert.ok(restored.data.room.players.every((p) => !("ageGroup" in p)));
@@ -298,4 +303,30 @@ test("the API lets a host start when exactly two human players have joined", asy
   assert.equal(started.data.room.players.length, 2);
   const other = await call(base, "GET", null, joined.data.token);
   assert.equal(other.data.room.phase, "writing");
+});
+
+test("API carries recent question history into new rooms and joining players", async (t) => {
+  const { call } = await setup(t);
+  const previous = await call("/api/rooms", "POST", {
+    name: "Previous",
+    ageGroup: "adult26",
+    demo: true,
+  });
+  const recent = previous.data.room.prompts.map((p) => p.id);
+  const next = await call("/api/rooms", "POST", {
+    name: "Next",
+    ageGroup: "adult26",
+    demo: true,
+    recentPromptIds: recent,
+  });
+  assert.equal(next.status, 201);
+  assert(next.data.room.prompts.every((p) => !recent.includes(p.id)));
+  const joined = await call(`/api/rooms/${next.data.room.code}/join`, "POST", {
+    name: "Guest",
+    ageGroup: "adult26",
+    recentPromptIds: recent,
+  });
+  assert.equal(joined.status, 200);
+  assert(joined.data.room.prompts.every((p) => !recent.includes(p.id)));
+  assert(!JSON.stringify(joined.data).includes('"promptHistory"'));
 });

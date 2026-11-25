@@ -1,11 +1,10 @@
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import {
   PROMPTS,
-  DEMO_ANSWERS,
   AGE_GROUPS,
   promptsForPlayer,
   promptPackForRoom,
-  SILLY_DEMO_ANSWERS,
+  normalisePromptHistory,
 } from "./prompts.mjs";
 
 export const PHASES = ["reading", "discussion", "voting", "reveal", "story"];
@@ -73,14 +72,17 @@ export function newRoom(
   demo = false,
   now = Date.now(),
   ageGroup = "adult",
+  recentPromptIds = [],
 ) {
   const host = player(name, false, ageGroup);
+  host.promptHistory = normalisePromptHistory(recentPromptIds);
   const room = {
     code: Array.from(
       { length: 6 },
       () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[randomInt(32)],
     ).join(""),
     version: 0,
+    promptSeed: id(),
     createdAt: now,
     expiresAt: now + 24 * 3600000,
     hostId: host.id,
@@ -120,19 +122,15 @@ function configureDemo(room) {
     .filter((p) => p.bot)
     .forEach((p) => {
       p.ageGroup = host?.ageGroup === "adult26" ? "adult26" : "adult";
+      p.promptHistory ??= [...(host?.promptHistory ?? [])];
     });
-  const answers =
-    promptPackForRoom(room) === "extra-silly"
-      ? SILLY_DEMO_ANSWERS
-      : DEMO_ANSWERS;
   room.players
     .filter((p) => p.bot)
-    .forEach((p, n) => {
-      p.answers = promptsForPlayer(p, room).map((prompt, i) => ({
-        promptId: prompt.id,
-        truth: answers[n][i * 2],
-        lie: answers[n][i * 2 + 1],
-      }));
+    .forEach((p) => {
+      p.answers = promptsForPlayer(p, room).map((prompt) => {
+        const [truth, lie] = shuffle([...prompt.decoys, ...prompt.wildcards]);
+        return { promptId: prompt.id, truth, lie };
+      });
       p.submitted = true;
     });
 }
@@ -146,7 +144,13 @@ export function authorize(room, token, now = Date.now()) {
   fail(p, "Your session is no longer in this room. Please join again.", 401);
   return p;
 }
-export function joinRoom(room, name, now = Date.now(), ageGroup = "adult") {
+export function joinRoom(
+  room,
+  name,
+  now = Date.now(),
+  ageGroup = "adult",
+  recentPromptIds = [],
+) {
   fail(room.expiresAt > now, "This room has expired.", 404);
   fail(
     room.phase === "lobby" && !room.locked,
@@ -154,6 +158,7 @@ export function joinRoom(room, name, now = Date.now(), ageGroup = "adult") {
   );
   fail(room.players.length < 8, "This room is full (8 players).");
   const p = player(name, false, ageGroup);
+  p.promptHistory = normalisePromptHistory(recentPromptIds);
   fail(
     !room.players.some((x) => key(x.name) === key(p.name)),
     "That nickname is already taken. Try another.",
@@ -206,9 +211,12 @@ function startQuestions(room, now) {
     "Everyone needs at least one complete truth and lie before the game can start. Add more writing time.",
   );
   room.queue = [];
+  const answerOrder = new Map(
+    room.players.map((p) => [p.id, shuffle(p.answers)]),
+  );
   for (let round = 0; round < count; round++)
     for (const p of room.players)
-      room.queue.push(buildQuestion(p, p.answers[round]));
+      room.queue.push(buildQuestion(p, answerOrder.get(p.id)[round]));
   room.questionIndex = 0;
   room.votes = {};
   enter(room, "reading", now);
@@ -340,6 +348,7 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
         "Everyone needs to choose their age group in the room before starting.",
       );
       room.promptPack = promptPackForRoom(room);
+      if (room.demo) configureDemo(room);
       room.locked = true;
       enter(room, "writing", now);
       break;
@@ -488,13 +497,16 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       host();
       fail(room.phase === "finished", "Finish this game first.");
       for (const p of room.players) {
+        p.promptHistory = normalisePromptHistory([
+          ...(p.promptHistory ?? []),
+          ...promptsForPlayer(p, room).map((prompt) => prompt.id),
+          ...room.queue.map((q) => q.promptId),
+        ]);
         p.score = 0;
         p.correct = 0;
         p.fooled = 0;
-        if (!p.bot) {
-          p.answers = [];
-          p.submitted = false;
-        }
+        p.answers = [];
+        p.submitted = false;
       }
       room.queue = [];
       room.results = [];
@@ -502,6 +514,8 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       room.questionIndex = 0;
       room.locked = false;
       delete room.promptPack;
+      room.promptSeed = id();
+      if (room.demo) configureDemo(room);
       room.needsAnswers = false;
       enter(room, "lobby", now);
       break;

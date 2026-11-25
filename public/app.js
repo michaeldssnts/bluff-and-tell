@@ -374,6 +374,28 @@ function accept(data) {
       storage.remove(draftKey());
     }
     room = data.room;
+    if (room.phase !== "lobby" && room.prompts.length) {
+      const previous = storage.get("bt-prompt-history") ?? {};
+      const ids = room.prompts.map((p) => p.id);
+      const round = room.code + ":" + ids.join(",");
+      let history = Array.isArray(previous.ids)
+        ? previous.ids.filter((id) => typeof id === "string")
+        : [];
+      const question = room.question?.id ?? null;
+      const newRound = previous.round !== round;
+      const newQuestion = question && previous.question !== question;
+      if (newRound || newQuestion) {
+        const seen = [
+          ...(newRound ? ids : []),
+          ...(newQuestion ? [room.question.promptId] : []),
+        ];
+        history = [
+          ...history.filter((id) => !seen.includes(id)),
+          ...new Set(seen),
+        ].slice(-90);
+        storage.set("bt-prompt-history", { round, question, ids: history });
+      }
+    }
     offset = room.serverNow - Date.now();
     connected = true;
     render();
@@ -446,7 +468,11 @@ async function createOrJoin(kind) {
       kind === "join" ? `/api/rooms/${code}/join` : "/api/rooms",
       {
         method: "POST",
-        body: { name, demo: kind === "demo" },
+        body: {
+          name,
+          demo: kind === "demo",
+          recentPromptIds: storage.get("bt-prompt-history")?.ids ?? [],
+        },
         auth: false,
       },
     );

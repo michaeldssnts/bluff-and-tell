@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { EXTRA_PROMPTS } from "./extra-prompts.mjs";
+
 export const PROMPTS = [
   {
     id: "first-job",
@@ -63,33 +66,6 @@ export const PROMPTS = [
     ],
   },
 ];
-export const DEMO_ANSWERS = [
-  [
-    "Washing cars",
-    "Working in a café",
-    "Been on local television",
-    "Won a dance competition",
-    "Balloons popping",
-    "Clowns",
-  ],
-  [
-    "Dressing as a giant tooth outside a dentist",
-    "Babysitting",
-    "Accidentally joined the wrong wedding",
-    "Sung karaoke alone",
-    "Escalators",
-    "Deep swimming pools",
-  ],
-  [
-    "Packing supermarket shelves",
-    "Delivering newspapers",
-    "Been chased out of a wedding by a peacock",
-    "Slept through a fire alarm",
-    "Birds flying indoors",
-    "Clowns",
-  ],
-];
-
 export const AGE_GROUPS = ["child", "teen", "adult", "adult26"];
 
 PROMPTS.push(
@@ -276,38 +252,51 @@ export function promptPackForRoom(room) {
     ? "extra-silly"
     : "personal";
 }
+export function normalisePromptHistory(value) {
+  if (!Array.isArray(value)) return [];
+  const valid = new Set(PROMPTS.map((p) => p.id));
+  return value
+    .filter((id, index) => valid.has(id) && value.lastIndexOf(id) === index)
+    .slice(-90);
+}
+export function promptPoolForPlayer(player, room) {
+  if (player.ageGroup === null) return [];
+  const age = player.ageGroup ?? "adult";
+  if (room && promptPackForRoom(room) === "extra-silly")
+    return PROMPTS.filter(
+      (p) => SILLY_PROMPTS.includes(p.id) || p.silly || p.family,
+    );
+  const legacy = PROMPT_SETS[age] ?? PROMPT_SETS.adult;
+  return PROMPTS.filter(
+    (p) => legacy.includes(p.id) || (!p.silly && p.audiences?.includes(age)),
+  );
+}
 export function promptsForPlayer(player, room) {
   if (player.ageGroup === null) return [];
-  // Preserve the original set for saved players who predate age-group selection.
-  const ids =
-    room && promptPackForRoom(room) === "extra-silly"
-      ? SILLY_PROMPTS
-      : (PROMPT_SETS[player.ageGroup ?? "adult"] ?? PROMPT_SETS.adult);
-  return ids.map((id) => PROMPTS.find((prompt) => prompt.id === id));
+  // Saved games keep their existing prompts until replay; no draft changes mid-game.
+  if (!room?.promptSeed || player.ageGroup === undefined) {
+    const ids =
+      room && promptPackForRoom(room) === "extra-silly"
+        ? SILLY_PROMPTS
+        : (PROMPT_SETS[player.ageGroup ?? "adult"] ?? PROMPT_SETS.adult);
+    return ids.map((id) => PROMPTS.find((p) => p.id === id));
+  }
+  const history = new Map(
+    normalisePromptHistory(player.promptHistory).map((id, index) => [
+      id,
+      index,
+    ]),
+  );
+  const ranked = promptPoolForPlayer(player, room).map((prompt) => ({
+    prompt,
+    recent: history.get(prompt.id) ?? -1,
+    rank: createHash("sha256")
+      .update(`${room.promptSeed}:${player.id}:${prompt.id}`)
+      .digest("hex"),
+  }));
+  // Unseen questions first, then least-recently seen. Seeded ordering is stable on reconnect.
+  ranked.sort((a, b) => a.recent - b.recent || a.rank.localeCompare(b.rank));
+  return ranked.slice(0, 3).map((row) => row.prompt);
 }
-export const SILLY_DEMO_ANSWERS = [
-  [
-    "A tiny sofa for a pet",
-    "A souvenir I could not fit in my luggage",
-    "Packing the dishwasher",
-    "Board games",
-    "I said my houseplant looked lonely",
-    "My phone was dying",
-  ],
-  [
-    "An outfit for my pet",
-    "An enormous box of snacks",
-    "Stopping the microwave with one second left",
-    "Parking perfectly",
-    "I was waiting for a delivery",
-    "I already had plans",
-  ],
-  [
-    "A subscription I forgot to cancel",
-    "A kitchen gadget that promised too much",
-    "Walking past strangers without being overtaken",
-    "Remembering song lyrics",
-    "I blamed a completely imaginary plumber",
-    "I had an early start",
-  ],
-];
+
+PROMPTS.push(...EXTRA_PROMPTS);

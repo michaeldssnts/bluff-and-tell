@@ -8,7 +8,13 @@ import {
   snapshot,
   GameError,
 } from "../server/engine.mjs";
+import {
+  PROMPTS,
+  promptPoolForPlayer,
+  promptsForPlayer,
+} from "../server/prompts.mjs";
 const at = 1800000000000;
+const firstPrompt = (room, token) => snapshot(room, token, at).prompts[0].id;
 function group() {
   const { room, token } = newRoom("Mia", false, at);
   const b = joinRoom(room, "Tumi", at),
@@ -26,7 +32,7 @@ function prepared() {
       {
         answers: [
           {
-            promptId: "first-job",
+            promptId: firstPrompt(g.room, t),
             truth: "True job " + i,
             lie: "Fake job " + i,
           },
@@ -87,7 +93,13 @@ test("truth and lie must differ even with punctuation and casing changes", () =>
         g.tokens[0],
         "answers",
         {
-          answers: [{ promptId: "first-job", truth: "A Café!", lie: "a café" }],
+          answers: [
+            {
+              promptId: firstPrompt(g.room, g.tokens[0]),
+              truth: "A Café!",
+              lie: "a café",
+            },
+          ],
         },
         at,
       ),
@@ -312,19 +324,26 @@ test("authors can review and swap decoys without changing their true answer", ()
     before = [...p.answers[0].decoys];
   g.room.phase = "writing";
   g.room.deadline = at + 60000;
-  apply(g.room, g.tokens[0], "reroll", { promptId: "first-job" }, at);
+  apply(g.room, g.tokens[0], "reroll", { promptId: p.answers[0].promptId }, at);
   assert.equal(p.answers[0].truth, "True job 0");
   assert.ok(p.answers[0].decoys.every((x) => !before.includes(x)));
   const own = snapshot(g.room, g.tokens[0], at),
     other = snapshot(g.room, g.tokens[1], at);
   assert.deepEqual(own.ownAnswers[0].decoys, p.answers[0].decoys);
-  assert.notDeepEqual(other.ownAnswers[0].decoys, p.answers[0].decoys);
+  assert.equal(other.ownAnswers[0].truth, "True job 1");
   apply(g.room, g.tokens[0], "begin", {}, at);
   assert.ok(
     g.room.queue[0].options.some((o) => o.text === p.answers[0].decoys[0]),
   );
   assert.throws(
-    () => apply(g.room, g.tokens[0], "reroll", { promptId: "first-job" }, at),
+    () =>
+      apply(
+        g.room,
+        g.tokens[0],
+        "reroll",
+        { promptId: p.answers[0].promptId },
+        at,
+      ),
     /locked/,
   );
 });
@@ -344,15 +363,15 @@ test("mixed-age players receive their own suitable prompts without exposing age 
   const child = joinRoom(room, "Robin", at, "child"),
     teen = joinRoom(room, "Taylor", at, "teen");
   const view = (t) => snapshot(room, t, at);
-  assert.deepEqual(
-    view(child).prompts.map((p) => p.id),
-    ["favourite-food", "free-time", "dream-pet"],
-  );
-  assert.deepEqual(
-    view(teen).prompts.map((p) => p.id),
-    ["school-subject", "free-time", "dream-skill"],
-  );
-  assert.ok(view(token).prompts.some((p) => p.id === "first-job"));
+  for (const [t, ageGroup] of [
+    [child, "child"],
+    [teen, "teen"],
+    [token, "adult"],
+  ]) {
+    assert.equal(view(t).prompts.length, 3);
+    const allowed = new Set(promptPoolForPlayer({ ageGroup }).map((p) => p.id));
+    assert.ok(view(t).prompts.every((p) => allowed.has(p.id)));
+  }
   assert.equal(view(child).ageGroup, "child");
   assert.ok(view(child).players.every((p) => !("ageGroup" in p)));
   assert.ok(view(child).prompts.every((p) => !("decoys" in p)));
@@ -384,24 +403,21 @@ test("children cannot submit adult prompts by changing a request", () => {
     "answers",
     {
       answers: [
-        { promptId: "favourite-food", truth: "Pizza", lie: "Pancakes" },
+        { promptId: firstPrompt(room, token), truth: "Pizza", lie: "Pancakes" },
       ],
       submitted: true,
     },
     at,
   );
-  assert.equal(room.players[0].answers[0].promptId, "favourite-food");
+  assert.equal(room.players[0].answers[0].promptId, firstPrompt(room, token));
 });
 test("a complete mixed-age game builds and scores questions from all three sets", () => {
   const { room, token } = newRoom("Parent", false, at, "adult");
   const child = joinRoom(room, "Robin", at, "child"),
     teen = joinRoom(room, "Taylor", at, "teen");
   apply(room, token, "start", {}, at);
-  for (const [t, promptId] of [
-    [token, "first-job"],
-    [child, "favourite-food"],
-    [teen, "school-subject"],
-  ])
+  const selections = [token, child, teen].map((t) => [t, firstPrompt(room, t)]);
+  for (const [t, promptId] of selections)
     apply(
       room,
       t,
@@ -417,7 +433,7 @@ test("a complete mixed-age game builds and scores questions from all three sets"
   apply(room, token, "begin", {}, at);
   assert.deepEqual(
     room.queue.map((q) => q.promptId),
-    ["first-job", "favourite-food", "school-subject"],
+    selections.map(([, id]) => id),
   );
   for (const q of room.queue)
     assert.equal(new Set(q.options.map((o) => o.text)).size, 4);
@@ -467,7 +483,7 @@ test("a two-player game alternates roles, keeps votes private and scores correct
       {
         answers: [
           {
-            promptId: "first-job",
+            promptId: firstPrompt(room, t),
             truth: "Working in a cafe",
             lie: "Walking dogs",
           },
@@ -541,7 +557,9 @@ test("the only voter can change their mind before the shortened deadline", () =>
       t,
       "answers",
       {
-        answers: [{ promptId: "first-job", truth: "Cafe", lie: "Babysitting" }],
+        answers: [
+          { promptId: firstPrompt(room, t), truth: "Cafe", lie: "Babysitting" },
+        ],
       },
       at,
     );
@@ -633,10 +651,11 @@ test("all-26-plus rooms get the extra-silly pack and can finish a game", () => {
   assert.equal(room.promptPack, "extra-silly");
   for (const t of [token, guest]) {
     const view = snapshot(room, t, at);
-    assert.deepEqual(
-      view.prompts.map((p) => p.id),
-      ["ridiculous-purchase", "pointless-rivalry", "terrible-excuse"],
+    assert.equal(view.prompts.length, 3);
+    const allowed = new Set(
+      promptPoolForPlayer({ ageGroup: "adult26" }, room).map((p) => p.id),
     );
+    assert.ok(view.prompts.every((p) => allowed.has(p.id)));
     apply(
       room,
       t,
@@ -692,7 +711,15 @@ test("26-plus solo demos include simulated older players and matching silly answ
       .every(
         (p) =>
           p.ageGroup === "adult26" &&
-          p.answers[0].promptId === "ridiculous-purchase",
+          p.answers.every(
+            (a) =>
+              promptsForPlayer(p, room).some((q) => q.id === a.promptId) &&
+              PROMPTS.find((q) => q.id === a.promptId)
+                .decoys.concat(
+                  PROMPTS.find((q) => q.id === a.promptId).wildcards,
+                )
+                .includes(a.truth),
+          ),
       ),
   );
   apply(room, token, "start", {}, at);

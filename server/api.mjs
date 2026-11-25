@@ -46,6 +46,7 @@ export async function api(
           Boolean(data.demo),
           Date.now(),
           data.ageGroup === undefined ? null : validateAgeGroup(data.ageGroup),
+          data.recentPromptIds,
         );
         if (await store.create(room))
           return { status: 201, data: { token, room: snapshot(room, token) } };
@@ -69,6 +70,7 @@ export async function api(
             data.ageGroup === undefined
               ? null
               : validateAgeGroup(data.ageGroup),
+            data.recentPromptIds,
           );
           room.version++;
           return { token, room: snapshot(room, token) };
