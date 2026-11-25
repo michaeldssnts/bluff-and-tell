@@ -1035,7 +1035,7 @@ test("the host can skip a missing poser or close photos early", () => {
   assert.equal(g.room.phase, "reveal");
   assert.notEqual(first.id, q.id);
 });
-test("mixed games add one face-off per player after the writing step", () => {
+test("mixed games add one face or sound round per player after the writing step", () => {
   const g = group();
   apply(g.room, g.tokens[0], "settings", { mode: "mixed" }, at);
   apply(g.room, g.tokens[0], "start", {}, at);
@@ -1053,11 +1053,51 @@ test("mixed games add one face-off per player after the writing step", () => {
     ),
   );
   const types = g.room.queue.map((q) => q.type ?? "truth");
-  assert.equal(types.filter((t) => t === "face").length, 3);
+  assert.equal(types.filter((t) => t === "face").length, 2);
+  assert.equal(types.filter((t) => t === "sound").length, 1);
   assert.equal(types.filter((t) => t === "truth").length, 3);
   assert.equal(g.room.phase, "voting");
   // Nobody poses straight after their own truth question.
   g.room.queue.forEach((q, i) => {
-    if (q.type === "face") assert.notEqual(q.playerId, g.room.queue[i - 1].playerId);
+    if (q.type !== "truth" && q.type)
+      assert.notEqual(q.playerId, g.room.queue[i - 1].playerId);
   });
+});
+
+const sound = (tag = "U") => "data:audio/wav;base64," + tag.repeat(40);
+test("a backwards-singing round takes short WAV recordings and is judged like a face-off", () => {
+  const g = faceGame("sounds");
+  assert.equal(g.room.phase, "posing");
+  const q = g.room.queue[0];
+  assert.equal(q.type, "sound");
+  const singer = tokenOf(g, q.playerId),
+    copiers = g.tokens.filter((t) => t !== singer);
+  // Photos aren't accepted in a sound round, and vice versa.
+  assert.throws(
+    () => apply(g.room, singer, "photo", { questionId: q.id, image: photo() }, at),
+    /recording didn’t come through/,
+  );
+  apply(g.room, singer, "photo", { questionId: q.id, image: sound("S") }, at);
+  assert.equal(g.room.phase, "copying");
+  assert.deepEqual(Object.keys(photosFor(g.room, copiers[0], at).photos), [q.playerId]);
+  copiers.forEach((t, i) =>
+    apply(g.room, t, "photo", { questionId: q.id, image: sound("C" + i) }, at),
+  );
+  assert.equal(g.room.phase, "judging");
+  const firstId = g.room.players[g.tokens.indexOf(copiers[0])].id;
+  apply(g.room, singer, "face-vote", { questionId: q.id, playerId: firstId }, at);
+  apply(g.room, g.tokens[0], "next", {}, at);
+  assert.equal(g.room.phase, "reveal");
+  assert.equal(g.room.players.find((p) => p.id === firstId).score, 2);
+});
+test("sound rounds are off for under-13s and in the demo", () => {
+  const { room, token } = newRoom("Parent", false, at, "adult");
+  joinRoom(room, "Robin", at, "child");
+  apply(room, token, "settings", { mode: "sounds" }, at);
+  assert.throws(() => apply(room, token, "start", {}, at), /under 13/);
+  const demo = newRoom("Solo", true, at, "adult");
+  assert.throws(
+    () => apply(demo.room, demo.token, "settings", { mode: "sounds" }, at),
+    /microphones/,
+  );
 });

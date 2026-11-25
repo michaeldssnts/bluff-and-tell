@@ -29,6 +29,9 @@ const icons = {
   camera:
     '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   crown: '<path d="m3 8 4 4 5-7 5 7 4-4-2 11H5z"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  rewind: '<path d="M11 6 4 12l7 6zM20 6l-7 6 7 6z"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
 };
 const icon = (name, size = 18) =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] ?? icons.sparkles}</svg>`;
@@ -138,7 +141,7 @@ function controls() {
         : "") +
       '<p class="muted center" style="font-size:.8rem;margin:18px 0">Your choices stay private until the reveal. Your host can skip ahead if someone steps away.</p>'
     );
-  return `<div class="host-controls">${room.deadline || room.pausedRemaining !== null ? `<button class="button secondary small" data-action="pause">${icon(room.pausedRemaining !== null ? "play" : "pause", 15)} ${room.pausedRemaining !== null ? "Resume" : "Pause"}</button>` : ""}${["reading", "discussion", "story"].includes(room.phase) ? '<button class="button secondary small" data-action="extend">' + icon("plus", 15) + " Add a minute</button>" : ""}${["reading", "discussion", "voting", "story", "posing", "copying", "judging"].includes(room.phase) ? `<button class="button soft small" data-action="next" ${room.pausedRemaining !== null ? "disabled" : ""}>${room.phase === "posing" ? "Skip this face-off" : room.phase === "copying" ? "Close photos and start judging" : room.phase === "judging" ? "Close voting and reveal" : room.phase === "voting" ? (waitingOn().length ? "Close voting and reveal" : "Reveal now") : room.phase === "discussion" ? "Open voting" : room.phase === "reveal" ? "Hear the story" : room.phase === "story" ? "Next question" : "Start discussion"}</button>` : ""}${
+  return `<div class="host-controls">${room.deadline || room.pausedRemaining !== null ? `<button class="button secondary small" data-action="pause">${icon(room.pausedRemaining !== null ? "play" : "pause", 15)} ${room.pausedRemaining !== null ? "Resume" : "Pause"}</button>` : ""}${["reading", "discussion", "story"].includes(room.phase) ? '<button class="button secondary small" data-action="extend">' + icon("plus", 15) + " Add a minute</button>" : ""}${["reading", "discussion", "voting", "story", "posing", "copying", "judging"].includes(room.phase) ? `<button class="button soft small" data-action="next" ${room.pausedRemaining !== null ? "disabled" : ""}>${room.phase === "posing" ? (room.question?.type === "sound" ? "Skip this round" : "Skip this face-off") : room.phase === "copying" ? (room.question?.type === "sound" ? "Close recordings and start judging" : "Close photos and start judging") : room.phase === "judging" ? "Close voting and reveal" : room.phase === "voting" ? (waitingOn().length ? "Close voting and reveal" : "Reveal now") : room.phase === "discussion" ? "Open voting" : room.phase === "reveal" ? "Hear the story" : room.phase === "story" ? "Next question" : "Start discussion"}</button>` : ""}${
     room.players.some((p) => p.id !== room.me && !p.bot)
       ? `<label for="host-transfer" class="host-transfer-label">Hand over hosting</label><select class="host-transfer" id="host-transfer" data-transfer><option value="">Choose a player…</option>${room.players
           .filter((p) => p.id !== room.me && !p.bot)
@@ -153,13 +156,14 @@ function roomProfile() {
 function lobby() {
   const settings = room.settings;
   const needsProfiles = room.players.some((p) => p.profileReady === false);
-  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">GOOD COMPANY. QUESTIONABLE ANSWERS.</span><h1>The room is yours.</h1><p>${isHost() ? "Invite your friends, set the mood, and get ready to question everything." : "You’re in. Make yourself comfortable while your host gets everyone together."}</p></div><span class="pill lime">${icon("users", 16)} ${room.players.length}/8 players</span></div>${demoNote()}${roomProfile()}<div class="game-layout"><div><section class="room-invite"><span class="eyebrow">YOUR INVITE CODE</span><div class="room-code">${esc(room.code)}</div><p>Open this website on another phone and enter the code.</p><div class="invite-actions"><button class="button" data-copy-link>${icon("link", 15)} Copy invite link</button><button class="button secondary" data-copy-code>${icon("copy", 15)} Copy code</button></div></section><section class="panel"><div class="panel-title"><h2>Your people</h2>${isHost() ? `<button class="text-button" data-action="lock">${icon("lock", 15)} ${room.locked ? "Unlock lobby" : "Lock lobby"}</button>` : ""}</div>${roster()}${room.players.length < 8 ? `<div class="empty-slot"><span class="avatar">+</span>${room.players.length === 2 ? "Two is all you need. Start whenever you’re ready." : "There’s room for more questionable characters."}</div>` : ""}</section></div><section class="panel"><div class="panel-title"><h2>${icon("shuffle", 19)} Set the vibe</h2><span class="pill purple">${isHost() ? "Host controls" : "Game settings"}</span></div><div class="settings-grid"><div class="field-row"><label for="game-mode">Game type<small>${room.demo ? "Face off needs real cameras, so the demo is truth and lies only." : "Face off: copy each other’s silly faces with your camera. Switched off for players under 13."}</small></label><select id="game-mode" data-mode ${!isHost() || room.demo ? "disabled" : ""}>${[
+  return `${header()}<main id="main" class="pulse"><div class="game-head"><div><span class="eyebrow">GOOD COMPANY. QUESTIONABLE ANSWERS.</span><h1>The room is yours.</h1><p>${isHost() ? "Invite your friends, set the mood, and get ready to question everything." : "You’re in. Make yourself comfortable while your host gets everyone together."}</p></div><span class="pill lime">${icon("users", 16)} ${room.players.length}/8 players</span></div>${demoNote()}${roomProfile()}<div class="game-layout"><div><section class="room-invite"><span class="eyebrow">YOUR INVITE CODE</span><div class="room-code">${esc(room.code)}</div><p>Open this website on another phone and enter the code.</p><div class="invite-actions"><button class="button" data-copy-link>${icon("link", 15)} Copy invite link</button><button class="button secondary" data-copy-code>${icon("copy", 15)} Copy code</button></div></section><section class="panel"><div class="panel-title"><h2>Your people</h2>${isHost() ? `<button class="text-button" data-action="lock">${icon("lock", 15)} ${room.locked ? "Unlock lobby" : "Lock lobby"}</button>` : ""}</div>${roster()}${room.players.length < 8 ? `<div class="empty-slot"><span class="avatar">+</span>${room.players.length === 2 ? "Two is all you need. Start whenever you’re ready." : "There’s room for more questionable characters."}</div>` : ""}</section></div><section class="panel"><div class="panel-title"><h2>${icon("shuffle", 19)} Set the vibe</h2><span class="pill purple">${isHost() ? "Host controls" : "Game settings"}</span></div><div class="settings-grid"><div class="field-row"><label for="game-mode">Game type<small>${room.demo ? "Face and sound rounds need real cameras and microphones, so the demo is truth and lies only." : "Face off: copy each other’s silly faces. Backwards singing: copy a song played in reverse. Both are off for players under 13."}</small></label><select id="game-mode" data-mode ${!isHost() || room.demo ? "disabled" : ""}>${[
     ["classic", "Truth & lies"],
-    ["faces", "Face off (photos)"],
+    ["faces", "Face off (camera)"],
+    ["sounds", "Backwards singing (microphone)"],
     ["mixed", "Mixed"],
   ]
     .map(([v, l]) => `<option value="${v}" ${(settings.mode ?? "classic") === v ? "selected" : ""}>${l}</option>`)
-    .join("")}</select></div><div class="field-row"><label for="game-length">Game length<small>Everyone gets an equal turn.</small></label><select id="game-length" data-setting="questionsPerPlayer" ${!isHost() ? "disabled" : ""}><option value="1" ${settings.questionsPerPlayer === 1 ? "selected" : ""}>Quick game</option><option value="2" ${settings.questionsPerPlayer === 2 ? "selected" : ""}>Full game</option></select></div></div><p class="settings-note">${gameSummary(settings)} No timers: each step moves on once everyone is ready.<br><br>Correct guess: <strong>+2 points.</strong><br>Someone picks your lie: <strong>+1 point.</strong><br>Nobody spots your truth: <strong>+1 bonus.</strong>${(settings.mode ?? "classic") !== "classic" ? "<br>Each vote for your face-off copy: <strong>+2 points.</strong>" : ""}</p>${isHost() ? `<button class="button primary full" data-action="start" ${room.players.length < 2 || needsProfiles ? "disabled" : ""}>${icon("play", 18)} ${room.players.length < 2 ? "Waiting for your second player…" : needsProfiles ? "Waiting for player profiles…" : "Start the game"}</button>` : '<div class="note center">Waiting for your host to start the game.</div>' + (room.hostAway ? '<button class="button secondary full" data-action="claim-host">Take over as host (host disconnected)</button>' : "")}<div class="note">${icon("shield", 17)} <strong>Keep it comfortable.</strong> Skip anything too personal. Great stories beat embarrassing secrets.</div></section></div><div class="actions-row"><button class="text-button" data-leave>${icon("logout", 16)} ${room.demo ? "Exit demo" : "Leave room"}</button></div></main>${footer()}`;
+    .join("")}</select></div><div class="field-row"><label for="game-length">Game length<small>Everyone gets an equal turn.</small></label><select id="game-length" data-setting="questionsPerPlayer" ${!isHost() ? "disabled" : ""}><option value="1" ${settings.questionsPerPlayer === 1 ? "selected" : ""}>Quick game</option><option value="2" ${settings.questionsPerPlayer === 2 ? "selected" : ""}>Full game</option></select></div></div><p class="settings-note">${gameSummary(settings)} No timers: each step moves on once everyone is ready.<br><br>Correct guess: <strong>+2 points.</strong><br>Someone picks your lie: <strong>+1 point.</strong><br>Nobody spots your truth: <strong>+1 bonus.</strong>${(settings.mode ?? "classic") !== "classic" ? "<br>Each vote for your face or sound copy: <strong>+2 points.</strong>" : ""}</p>${isHost() ? `<button class="button primary full" data-action="start" ${room.players.length < 2 || needsProfiles ? "disabled" : ""}>${icon("play", 18)} ${room.players.length < 2 ? "Waiting for your second player…" : needsProfiles ? "Waiting for player profiles…" : "Start the game"}</button>` : '<div class="note center">Waiting for your host to start the game.</div>' + (room.hostAway ? '<button class="button secondary full" data-action="claim-host">Take over as host (host disconnected)</button>' : "")}<div class="note">${icon("shield", 17)} <strong>Keep it comfortable.</strong> Skip anything too personal. Great stories beat embarrassing secrets.</div></section></div><div class="actions-row"><button class="text-button" data-leave>${icon("logout", 16)} ${room.demo ? "Exit demo" : "Leave room"}</button></div></main>${footer()}`;
 }
 function draftKey() {
   return "bt-draft-" + session.code;
@@ -290,7 +294,8 @@ function waitingPanel() {
 function roundPoints(playerId) {
   const result = room.result;
   if (!result) return 0;
-  if (result.type === "face") return (result.tally?.[playerId] ?? 0) * 2;
+  if (["face", "sound"].includes(result.type))
+    return (result.tally?.[playerId] ?? 0) * 2;
   const pick = result.picks.find((p) => p.playerId === playerId);
   return (
     (pick?.points ?? 0) +
@@ -306,7 +311,7 @@ function profileCard() {
   const p = me();
   if (!p) return "";
   const delta = room.result ? roundPoints(p.id) : null;
-  return `<section class="my-profile" aria-label="Your profile">${avatar(p)}<div class="my-profile-name"><span class="eyebrow">YOUR PROFILE</span><strong>${esc(p.name)}</strong><small>Rank ${rankOf(p)} of ${room.players.length}${(room.settings.mode ?? "classic") === "faces" ? "" : ` · ${p.correct} ${p.correct === 1 ? "truth" : "truths"} spotted · ${p.fooled} fooled`}</small></div><div class="my-profile-score">${delta !== null ? `<span class="delta ${delta ? "up" : ""}">+${delta} this round</span>` : ""}<span class="points">${p.score}<small>pts</small></span></div></section>`;
+  return `<section class="my-profile" aria-label="Your profile">${avatar(p)}<div class="my-profile-name"><span class="eyebrow">YOUR PROFILE</span><strong>${esc(p.name)}</strong><small>Rank ${rankOf(p)} of ${room.players.length}${["faces", "sounds"].includes(room.settings.mode ?? "classic") ? "" : ` · ${p.correct} ${p.correct === 1 ? "truth" : "truths"} spotted · ${p.fooled} fooled`}</small></div><div class="my-profile-score">${delta !== null ? `<span class="delta ${delta ? "up" : ""}">+${delta} this round</span>` : ""}<span class="points">${p.score}<small>pts</small></span></div></section>`;
 }
 function noVoteWarning() {
   return `<div class="no-vote-warning" role="status">${icon("alert", 24)}<div><strong>You can’t vote on your own question</strong><p>${room.phase === "voting" ? "Everyone else is voting now. Keep a straight face while they guess." : "When voting opens, everyone else picks. Your job is to keep a straight face."}</p></div></div>`;
@@ -375,9 +380,11 @@ function gameSummary(settings) {
     mode = settings.mode ?? "classic";
   return mode === "faces"
     ? `${plural(n, "face-off round", "face-off rounds")}.`
-    : mode === "mixed"
-      ? `${plural(n, "truth question", "truth questions")} and ${plural(room.players.length, "face-off round", "face-off rounds")}.`
-      : `${plural(n, "question", "questions")}.`;
+    : mode === "sounds"
+      ? `${plural(n, "backwards-singing round", "backwards-singing rounds")}.`
+      : mode === "mixed"
+        ? `${plural(n, "truth question", "truth questions")} and ${plural(room.players.length, "face or sound round", "face or sound rounds")}.`
+        : `${plural(n, "question", "questions")}.`;
 }
 // ---- Face off: one player pulls a face, everyone copies it, the room votes on the best copy. ----
 let photoCache = { questionId: null, photos: {} },
@@ -389,7 +396,7 @@ const photoOf = (id) =>
     : null;
 async function loadPhotos() {
   const q = room?.question;
-  if (q?.type !== "face") return;
+  if (!["face", "sound"].includes(q?.type)) return;
   const key = [q.id, room.phase, ...(room.shotIds ?? [])].join("|");
   if (key === photoKey) return;
   photoKey = key;
@@ -496,6 +503,250 @@ function faceResults() {
       : "No votes this round.";
   return `<p class="face-headline">${headline}</p>${grid}<p class="muted face-rule">Each vote for your copy: +2</p>`;
 }
+// ---- Backwards singing: record on the phone, play recordings forwards or reversed. ----
+let audioCtx = null,
+  playing = null;
+const audio = () =>
+  (audioCtx ??= new (window.AudioContext || window.webkitAudioContext)());
+const decodedSounds = new Map();
+async function decodeSound(src) {
+  if (!decodedSounds.has(src)) {
+    // Decode the data URL directly: the page's security policy (rightly) blocks fetch() on data: URLs.
+    const binary = atob(src.slice(src.indexOf(",") + 1)),
+      bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    decodedSounds.set(src, await audio().decodeAudioData(bytes.buffer));
+  }
+  return decodedSounds.get(src);
+}
+function reversed(buffer) {
+  const out = audio().createBuffer(
+    buffer.numberOfChannels,
+    buffer.length,
+    buffer.sampleRate,
+  );
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++)
+    out.getChannelData(ch).set(Float32Array.from(buffer.getChannelData(ch)).reverse());
+  return out;
+}
+async function playSound(src, backwards) {
+  if (!src) return;
+  try {
+    await audio().resume();
+    playing?.stop();
+    const buffer = await decodeSound(src);
+    const node = audio().createBufferSource();
+    node.buffer = backwards ? reversed(buffer) : buffer;
+    node.connect(audio().destination);
+    node.start();
+    playing = node;
+  } catch {
+    toast("That sound won’t play here. Try turning your volume up or refreshing.");
+  }
+}
+// Recordings: at most 4 seconds, mono 8 kHz 8-bit WAV (about 43 KB), so every phone can play them.
+const MAX_SECONDS = 4;
+let rec = { state: "idle", data: null, questionId: null };
+const canRecord = () =>
+  window.isSecureContext &&
+  Boolean(navigator.mediaDevices?.getUserMedia) &&
+  "MediaRecorder" in window;
+function resetRecorder() {
+  clearInterval(rec.tick);
+  rec.stream?.getTracks().forEach((t) => t.stop());
+  rec = { state: "idle", data: null, questionId: room?.question?.id ?? null };
+}
+async function startRecording() {
+  if (!canRecord()) return;
+  resetRecorder();
+  let stream;
+  try {
+    await audio().resume();
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    toast("We couldn’t use your microphone. Allow microphone access for this site, then try again.");
+    return;
+  }
+  const recorder = new MediaRecorder(stream),
+    chunks = [];
+  recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  recorder.onstop = () => finishRecording(new Blob(chunks, { type: recorder.mimeType }));
+  rec = { ...rec, state: "recording", stream, recorder, started: Date.now() };
+  recorder.start();
+  rec.tick = setInterval(() => {
+    const left = Math.max(0, MAX_SECONDS - (Date.now() - rec.started) / 1000);
+    const el = $("#rec-time");
+    if (el) el.textContent = `${left.toFixed(1)}s left`;
+    if (left <= 0) stopRecording();
+  }, 100);
+  render(true);
+}
+function stopRecording() {
+  clearInterval(rec.tick);
+  if (rec.recorder?.state === "recording") rec.recorder.stop();
+  rec.stream?.getTracks().forEach((t) => t.stop());
+}
+async function finishRecording(blob) {
+  try {
+    const buffer = await audio().decodeAudioData(await blob.arrayBuffer());
+    rec = { state: "preview", data: await encodeWav(buffer), questionId: room.question.id };
+  } catch {
+    rec = { state: "idle", data: null, questionId: room?.question?.id };
+    toast("That recording didn’t work. Try again, a little closer to the microphone.");
+  }
+  render(true);
+}
+async function encodeWav(buffer) {
+  const rate = 8000,
+    length = Math.max(1, Math.floor(Math.min(buffer.duration, MAX_SECONDS) * rate)),
+    offline = new OfflineAudioContext(1, length, rate),
+    source = offline.createBufferSource();
+  source.buffer = buffer;
+  source.connect(offline.destination);
+  source.start();
+  const pcm = (await offline.startRendering()).getChannelData(0);
+  // Even out quiet and loud phones so every copy is easy to hear.
+  let peak = 0;
+  for (const v of pcm) peak = Math.max(peak, Math.abs(v));
+  const gain = peak > 0.02 ? 0.9 / peak : 1,
+    bytes = new Uint8Array(44 + length),
+    view = new DataView(bytes.buffer),
+    text = (at, str) => [...str].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
+  text(0, "RIFF");
+  view.setUint32(4, 36 + length, true);
+  text(8, "WAVEfmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate, true); // bytes per second
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true);
+  text(36, "data");
+  view.setUint32(40, length, true);
+  for (let i = 0; i < length; i++)
+    bytes[44 + i] = Math.max(0, Math.min(255, Math.round((pcm[i] * gain + 1) * 127.5)));
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 8192)
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return "data:audio/wav;base64," + btoa(binary);
+}
+async function sendRecording() {
+  if (!rec.data || photoBusy) return;
+  photoBusy = true;
+  render(true);
+  const questionId = room.question.id,
+    data = rec.data;
+  try {
+    photoCache =
+      photoCache.questionId === questionId
+        ? { questionId, photos: { ...photoCache.photos, [room.me]: data } }
+        : { questionId, photos: { [room.me]: data } };
+    await send("photo", { questionId, image: data });
+    resetRecorder();
+  } catch {
+    toast("That recording didn’t upload. Check your connection and try again.");
+  } finally {
+    photoBusy = false;
+    render(true);
+  }
+}
+const playButton = (id, backwards, label) =>
+  `<button class="button secondary play-button" type="button" data-play="${id}" data-backwards="${backwards ? 1 : 0}" ${photoOf(id) ? "" : "disabled"}>${icon(backwards ? "rewind" : "play", 16)} ${label}</button>`;
+function recorderPanel(startLabel, previewHint) {
+  if (!canRecord())
+    return `<div class="note warning">${icon("mic", 16)} <strong>Recording isn’t available on this connection.</strong> Phones only allow the microphone on the game’s secure (https) address. Ask your host to skip this round, or play on the online version.</div>`;
+  if (rec.questionId !== room.question.id) resetRecorder();
+  if (rec.state === "recording")
+    return `<div class="recorder recording"><span class="rec-dot" aria-hidden="true"></span><strong>Recording…</strong><span id="rec-time" aria-live="polite">${MAX_SECONDS}.0s left</span><button class="button primary full" type="button" data-rec="stop">${icon("stop", 18)} Stop recording</button></div>`;
+  if (rec.state === "preview")
+    return `<div class="recorder"><p>${previewHint}</p><div class="play-row"><button class="button secondary play-button" type="button" data-rec-play="0">${icon("play", 16)} Play it</button><button class="button secondary play-button" type="button" data-rec-play="1">${icon("rewind", 16)} Play it backwards</button></div><button class="button primary full" type="button" data-rec="send" ${photoBusy ? "disabled" : ""}>${icon("check", 18)} ${photoBusy ? "Sending…" : "Send it"}</button><button class="text-button" type="button" data-rec="start">${icon("mic", 15)} Record again</button></div>`;
+  return `<button class="button primary full photo-button" type="button" data-rec="start" ${room.pausedRemaining !== null ? "disabled" : ""}>${icon("mic", 20)} ${startLabel}</button><p class="muted center rec-limit">Up to ${MAX_SECONDS} seconds.</p>`;
+}
+function soundResults() {
+  const result = room.result,
+    copies = [...result.copies].sort(
+      (a, b) => (result.tally[b] ?? 0) - (result.tally[a] ?? 0),
+    ),
+    top = Math.max(0, ...copies.map((id) => result.tally[id] ?? 0)),
+    winners = copies.filter((id) => top && (result.tally[id] ?? 0) === top);
+  const headline = !copies.length
+    ? "Nobody sent a copy this time."
+    : winners.length
+      ? `${icon("crown", 20)} Best copy: <strong>${esc(winners.map((id) => person(id)?.name).join(" & "))}</strong>`
+      : "No votes this round.";
+  return `<p class="face-headline">${headline}</p><div class="sound-list">${copies
+    .map((id) => {
+      const votes = result.tally[id] ?? 0;
+      return `<div class="sound-card ${votes && votes === top ? "winner" : ""}"><div class="sound-who">${avatar(person(id))}<strong>${esc(person(id)?.name ?? "Player")}${id === room.me ? " (you)" : ""}</strong><span class="round-points ${votes ? "up" : ""}">+${votes * 2}</span></div><small>${votes} ${votes === 1 ? "vote" : "votes"}</small><div class="play-row">${playButton(id, false, "As recorded")}${playButton(id, true, "Flipped back")}</div></div>`;
+    })
+    .join("")}</div><p class="muted face-rule">Each vote for your copy: +2</p>`;
+}
+function soundScreen() {
+  const q = room.question,
+    singer = person(q.playerId),
+    mine = q.playerId === room.me,
+    shots = room.shotIds ?? [],
+    myShot = shots.includes(room.me);
+  const labels = {
+    posing: mine ? "Your turn to sing" : `${singer.name} is singing`,
+    copying: "Copy it backwards",
+    judging: "Pick the best copy",
+    reveal: "And the best copy is…",
+  };
+  let count = "";
+  if (room.phase === "copying")
+    count = `${icon("mic", 19)} ${copyIds().length}/${copierIds().length}`;
+  if (room.phase === "judging")
+    count = `${icon("users", 19)} ${(room.votedIds ?? []).length}/${judgeIds().length}`;
+  if (room.phase === "reveal")
+    count = `${icon("check", 19)} ${(room.nextReadyIds ?? []).length}/${room.players.length}`;
+  const original = `<div class="sound-target"><span class="eyebrow">${esc(singer.name.toUpperCase())}’S SOUND</span><div class="play-row">${room.phase === "copying" ? playButton(q.playerId, true, "Play it backwards") : `${playButton(q.playerId, false, "Original")}${playButton(q.playerId, true, "Backwards")}`}</div></div>`;
+  let body = "";
+  if (room.phase === "posing")
+    body = mine
+      ? `<div class="face-cta"><p>Sing or say a short word or phrase. Everyone will hear it <strong>backwards</strong> and try to copy that sound.</p>${recorderPanel("Record your sound", "Happy with it? Everyone will hear the backwards version.")}</div>`
+      : `<div class="face-wait">${avatar(singer)}<p><strong>${esc(singer.name)}</strong> is recording something to sing. Turn your volume up and get ready to copy it backwards.</p></div>`;
+  if (room.phase === "copying")
+    body = `${original}${
+      mine
+        ? `<p class="phase-message center">Now listen to them try. The copies appear once everyone has recorded.</p>`
+        : myShot && rec.state === "idle"
+          ? `<div class="recorder"><p class="next-status">${icon("check", 17)} Copy sent. You can record again until everyone’s in.</p><div class="play-row">${playButton(room.me, false, "Play my copy")}${playButton(room.me, true, "Flipped back")}</div><button class="text-button" type="button" data-rec="start">${icon("mic", 15)} Record again</button></div>`
+          : `<p class="phase-message center">Listen to the backwards sound as often as you like, then record yourself copying it.</p>${recorderPanel("Record your copy", "Tip: play it backwards. A great copy sounds like the original!")}`
+    }${waitingChips(copierIds().filter((id) => !shots.includes(id)), "STILL RECORDING")}`;
+  if (room.phase === "judging") {
+    const canJudge = judgeIds().includes(room.me);
+    body = `${original}<p class="phase-message center">${canJudge ? "Play each copy flipped back the right way round. Who sounds most like the original? You can change your vote until everyone’s in." : "There’s nothing for you to judge this round. Sit back and listen."}</p><div class="sound-list">${copyIds()
+      .map((id) => {
+        const p = person(id),
+          own = id === room.me,
+          chosen = room.myVote === id;
+        return `<div class="sound-card ${chosen ? "chosen" : ""}"><div class="sound-who">${avatar(p)}<strong>${esc(p?.name ?? "Player")}${own ? " (you)" : ""}</strong></div><div class="play-row">${playButton(id, false, "As recorded")}${playButton(id, true, "Flipped back")}</div>${
+          own
+            ? `<span class="face-own">${icon("lock", 15)} Your copy</span>`
+            : canJudge
+              ? `<button class="button ${chosen ? "primary" : "secondary"} full" type="button" data-face-vote="${id}" aria-pressed="${chosen}">${chosen ? icon("check", 16) + " Your vote" : "Vote for " + esc(p?.name ?? "this copy")}</button>`
+              : ""
+        }</div>`;
+      })
+      .join("")}</div>${
+      room.deadline
+        ? `<div class="waiting-panel done">${icon("check", 18)}<strong>Everyone has voted. Revealing…</strong></div>`
+        : waitingChips(judgeIds().filter((id) => !(room.votedIds ?? []).includes(id)), "STILL DECIDING")
+    }`;
+  }
+  if (room.phase === "reveal") body = `${original}${soundResults()}${nextPanel()}`;
+  return `${header()}<main id="main" class="question-stage pulse">${demoNote()}<div class="status-banner"><div><span class="eyebrow" style="margin:0 0 5px">ROUND ${q.number} OF ${q.total} · BACKWARDS SINGING</span><strong>${esc(labels[room.phase] ?? "")}</strong></div>${count ? `<span class="timer vote-count">${count}</span>` : ""}</div>${room.pausedRemaining !== null ? '<div class="note warning">Game paused. Take a breath. The host will resume when everyone is ready.</div>' : ""}${profileCard()}<section class="question-card face-card"><div class="question-topline"><div class="subject">${avatar(singer)}<div class="subject-details"><strong>${esc(singer.name)}${mine ? " (you)" : ""}</strong><small>Sings it. Everyone copies it backwards.</small></div></div><span class="pill purple">${icon("mic", 14)} Backwards</span></div>${body}${controls()}</section><div class="mini-scoreboard">${[
+    ...room.players,
+  ]
+    .sort((a, b) => b.score - a.score)
+    .map((p) => {
+      const delta = roundPoints(p.id);
+      return `<span>${esc(p.name)}<b>${p.score}</b>${delta ? `<i class="delta up">+${delta}</i>` : ""}</span>`;
+    })
+    .join("")}</div></main>${footer()}`;
+}
 function faceScreen() {
   const q = room.question,
     poser = person(q.playerId),
@@ -563,6 +814,7 @@ function faceScreen() {
 }
 function questionScreen() {
   if (room.question?.type === "face") return faceScreen();
+  if (room.question?.type === "sound") return soundScreen();
   const q = room.question,
     subject = person(q.playerId),
     mine = q.playerId === room.me,
@@ -609,7 +861,7 @@ function historyFace(q, r) {
   const tally = r?.tally ?? {},
     top = Math.max(0, ...Object.values(tally)),
     best = Object.keys(tally).filter((id) => top && tally[id] === top);
-  return `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · Face off</p><strong>${best.length ? "Best copy: " + esc(best.map((id) => person(id)?.name).join(" & ")) : "No winning copy"}</strong><small>${r?.copies?.length ?? 0} copies · ${top} ${top === 1 ? "vote" : "votes"} for the best</small></div>`;
+  return `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · ${q.type === "sound" ? "Backwards singing" : "Face off"}</p><strong>${best.length ? "Best copy: " + esc(best.map((id) => person(id)?.name).join(" & ")) : "No winning copy"}</strong><small>${r?.copies?.length ?? 0} copies · ${top} ${top === 1 ? "vote" : "votes"} for the best</small></div>`;
 }
 function finished() {
   const players = [...room.players].sort(
@@ -621,7 +873,7 @@ function finished() {
     bluffers = players.filter((p) => p.fooled === bluffMax),
     correctMax = Math.max(...players.map((p) => p.correct)),
     detectives = players.filter((p) => p.correct === correctMax);
-  return `${header()}<main id="main" class="finished pulse">${demoNote()}<div class="trophy" aria-hidden="true">${icon("trophy", 65)}</div><span class="eyebrow">THE TRUTH HAS SPOKEN.</span><h1>${winners.length > 1 ? "A suspicious tie." : esc(winners[0].name) + " takes it."}</h1><p>${winners.length > 1 ? esc(winners.map((p) => p.name).join(" & ")) + " share the win." : "Good instincts. Excellent company. A few questionable life choices."}</p><div class="victory-share"><button class="button primary" type="button" id="share-victory">${icon("sparkles", 18)} ${winners.some((p) => p.id === room.me) ? "Share your victory" : "Share your result"}</button></div><section class="panel"><div class="panel-title"><h2>The final word</h2><span class="pill lime">${room.history.length} questions</span></div>${players.map((p, i) => `<div class="player-row"><span class="rank">${players.findIndex((x) => x.score === p.score) + 1}</span>${avatar(p)}<div class="player-name">${esc(p.name)}${p.id === room.me ? " <small>You</small>" : ""}</div><span class="points">${p.score}<small>pts</small></span></div>`).join("")}</section><div class="end-actions"><button class="button primary" data-action="replay">${icon("shuffle", 18)} Play again</button><button class="button secondary" data-leave>${icon("logout", 18)} ${room.demo ? "Exit demo" : "Exit room"}</button><p class="muted">Play again takes everyone back to the lobby with fresh questions.</p></div><div class="awards"><div class="award"><small>${icon("eye", 16)} MASTER BLUFFER</small><strong>${bluffMax ? esc(bluffers.map((p) => p.name).join(" & ")) : "Nobody got away with it"}</strong><p>${bluffMax ? bluffMax + (bluffMax === 1 ? " guess fooled." : " guesses fooled.") + " Very convincing." : "The group saw through every lie."}</p></div><div class="award"><small>${icon("sparkles", 16)} HUMAN LIE DETECTOR</small><strong>${correctMax ? esc(detectives.map((p) => p.name).join(" & ")) : "Next time, trust your gut"}</strong><p>${correctMax ? correctMax + (correctMax === 1 ? " truth spotted." : " truths spotted.") + " Impressive instincts." : "Those were some convincing decoys."}</p></div></div><details class="panel history"><summary>Relive the revelations</summary>${room.history.map(({ question: q, result: r }) => q.type === "face" ? historyFace(q, r) : `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · ${esc(q.title)}</p><strong>${esc(q.options.find((o) => o.id === r?.truthId)?.text)}</strong><small>The lie: ${esc(q.options.find((o) => o.id === r?.lieId)?.text)} · Fooled ${r?.bluffPoints ?? 0}</small></div>`).join("")}</details></main>${footer()}`;
+  return `${header()}<main id="main" class="finished pulse">${demoNote()}<div class="trophy" aria-hidden="true">${icon("trophy", 65)}</div><span class="eyebrow">THE TRUTH HAS SPOKEN.</span><h1>${winners.length > 1 ? "A suspicious tie." : esc(winners[0].name) + " takes it."}</h1><p>${winners.length > 1 ? esc(winners.map((p) => p.name).join(" & ")) + " share the win." : "Good instincts. Excellent company. A few questionable life choices."}</p><div class="victory-share"><button class="button primary" type="button" id="share-victory">${icon("sparkles", 18)} ${winners.some((p) => p.id === room.me) ? "Share your victory" : "Share your result"}</button></div><section class="panel"><div class="panel-title"><h2>The final word</h2><span class="pill lime">${room.history.length} questions</span></div>${players.map((p, i) => `<div class="player-row"><span class="rank">${players.findIndex((x) => x.score === p.score) + 1}</span>${avatar(p)}<div class="player-name">${esc(p.name)}${p.id === room.me ? " <small>You</small>" : ""}</div><span class="points">${p.score}<small>pts</small></span></div>`).join("")}</section><div class="end-actions"><button class="button primary" data-action="replay">${icon("shuffle", 18)} Play again</button><button class="button secondary" data-leave>${icon("logout", 18)} ${room.demo ? "Exit demo" : "Exit room"}</button><p class="muted">Play again takes everyone back to the lobby with fresh questions.</p></div><div class="awards"><div class="award"><small>${icon("eye", 16)} MASTER BLUFFER</small><strong>${bluffMax ? esc(bluffers.map((p) => p.name).join(" & ")) : "Nobody got away with it"}</strong><p>${bluffMax ? bluffMax + (bluffMax === 1 ? " guess fooled." : " guesses fooled.") + " Very convincing." : "The group saw through every lie."}</p></div><div class="award"><small>${icon("sparkles", 16)} HUMAN LIE DETECTOR</small><strong>${correctMax ? esc(detectives.map((p) => p.name).join(" & ")) : "Next time, trust your gut"}</strong><p>${correctMax ? correctMax + (correctMax === 1 ? " truth spotted." : " truths spotted.") + " Impressive instincts." : "Those were some convincing decoys."}</p></div></div><details class="panel history"><summary>Relive the revelations</summary>${room.history.map(({ question: q, result: r }) => ["face", "sound"].includes(q.type) ? historyFace(q, r) : `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · ${esc(q.title)}</p><strong>${esc(q.options.find((o) => o.id === r?.truthId)?.text)}</strong><small>The lie: ${esc(q.options.find((o) => o.id === r?.lieId)?.text)} · Fooled ${r?.bluffPoints ?? 0}</small></div>`).join("")}</details></main>${footer()}`;
 }
 function render(force = false) {
   const focused = document.activeElement?.matches("textarea")
@@ -759,7 +1011,7 @@ function accept(data) {
       storage.remove(draftKey());
     }
     room = data.room;
-    if (room.question?.type === "face") loadPhotos();
+    if (["face", "sound"].includes(room.question?.type)) loadPhotos();
     if (room.phase !== "lobby" && room.prompts.length) {
       const previous = storage.get("bt-prompt-history") ?? {};
       const ids = room.prompts.map((p) => p.id);
@@ -1270,6 +1522,15 @@ document.addEventListener("click", async (e) => {
   else if (t.matches("[data-action]")) send(t.dataset.action).catch(() => {});
   else if (t.matches("[data-swap]")) swapPrompt(t.dataset.swap);
   else if (t.matches("[data-take-photo]")) $("#photo-input")?.click();
+  else if (t.matches("[data-rec]")) {
+    const step = t.dataset.rec;
+    if (step === "start") startRecording();
+    else if (step === "stop") stopRecording();
+    else if (step === "send") sendRecording();
+  } else if (t.matches("[data-rec-play]"))
+    playSound(rec.data, t.dataset.recPlay === "1");
+  else if (t.matches("[data-play]"))
+    playSound(photoOf(t.dataset.play), t.dataset.backwards === "1");
   else if (t.matches("[data-face-vote]"))
     send("face-vote", {
       playerId: t.dataset.faceVote,
