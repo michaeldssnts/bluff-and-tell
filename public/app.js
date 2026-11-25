@@ -121,7 +121,7 @@ function header() {
   return `<header class="site-header"><a class="wordmark" href="/" ${room ? "data-game-home" : ""}><span class="mark" aria-hidden="true"><b>BT</b></span>BLUFF <b>&</b> TELL</a><div class="header-right">${room ? `<span class="pill ${room.demo ? "pink" : "lime"}">${room.demo ? "SOLO DEMO" : `ROOM ${esc(room.code)}`}</span>` : '<span class="pill">A party in your pocket</span>'}${room?.demo ? '<button class="text-button" data-exit-demo>Exit demo</button>' : ""}<button class="text-button" data-help>${icon("help")}<span>How to play</span></button></div></header>`;
 }
 function footer() {
-  return `<footer class="site-footer"><div class="footer-game-meta">${questionProgress()}<span>Know your friends. Believe nothing.</span></div><div class="footer-links"><span id="connection-status">${connected ? "Made for your people." : "Connection lost. Reconnecting…"}</span><button class="text-button" data-recommend>Recommend Bluff &amp; Tell</button><button class="text-button" data-privacy>Privacy</button></div></footer>`;
+  return `<footer class="site-footer"><div class="footer-game-meta">${questionProgress()}<span>Know your friends. Believe nothing.</span></div><div class="footer-links">${room ? '<a class="text-button" href="/" data-exit-room>Exit room</a>' : ""}<span id="connection-status">${connected ? "Made for your people." : "Connection lost. Reconnecting…"}</span><button class="text-button" data-recommend>Recommend Bluff &amp; Tell</button><button class="text-button" data-privacy>Privacy</button></div></footer>`;
 }
 function demoNote() {
   if (room.demo && room.flowVersion === 2 && room.phase !== "lobby")
@@ -1148,7 +1148,32 @@ async function send(action, data = {}) {
     busy = false;
   }
 }
+async function exitRoom() {
+  if (!session) return;
+  // Remove the player from a lobby or completed game. An active round keeps
+  // its player records, as when closing the tab, while this device goes home.
+  if (
+    room &&
+    !room.demo &&
+    ["lobby", "finished"].includes(room.phase) &&
+    !busy
+  ) {
+    try {
+      await send("leave");
+      return;
+    } catch {
+      /* Going home still works offline. */
+    }
+  }
+  reset();
+}
 function reset() {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  if (session) {
+    storage.remove(draftKey());
+    storage.remove(slotsKey());
+  }
   storage.remove("bt-session");
   if (session) storage.remove("bt-draft-" + session.code);
   session = null;
@@ -1157,6 +1182,8 @@ function reset() {
   draftDirty = false;
   signature = "";
   previousPhase = "";
+  inviteCode = "";
+  document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
   history.replaceState({}, "", location.pathname);
   render(true);
 }
@@ -1610,7 +1637,10 @@ document.addEventListener("change", (e) => {
 document.addEventListener("click", async (e) => {
   const t = e.target.closest("button,a");
   if (!t) return;
-  if (t.matches("[data-help]")) $("#help-dialog").showModal();
+  if (t.matches("[data-exit-room]")) {
+    e.preventDefault();
+    exitRoom();
+  } else if (t.matches("[data-help]")) $("#help-dialog").showModal();
   else if (t.matches("[data-recommend]")) openRecommendation();
   else if (t.id === "share-recommendation") shareRecommendation();
   else if (t.id === "download-social-card") downloadRecommendation();
