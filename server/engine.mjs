@@ -12,17 +12,9 @@ export const PHASES = ["voting", "reveal", "story"];
 // and +1 if at least one person voted and nobody spotted their truth.
 export const POINTS = { truth: 2, fooled: 1, stumped: 1, faceVote: 2 };
 // Game types: truth-and-lie questions, face-off photo rounds, or a mix of both.
-export const MODES = ["classic", "faces", "sounds", "mixed"];
-// Copy rounds: a player makes a face or a sound, everyone copies it, the room votes on the best copy.
-const COPY_ROUNDS = ["face", "sound"];
-const isCopyRound = (q) => COPY_ROUNDS.includes(q?.type);
+export const MODES = ["classic", "faces", "mixed"];
 // Photos are small JPEG data URLs, resized on the phone before upload.
 export const MAX_PHOTO_LENGTH = 60000;
-// Sounds are short, low-rate WAV recordings (about 4 seconds at 8 kHz, 8-bit) made on the phone.
-const MEDIA_FORMAT = {
-  face: /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/,
-  sound: /^data:audio\/wav;base64,[A-Za-z0-9+/=]+$/,
-};
 export const DEFAULT_SETTINGS = {
   mode: "classic",
   questionsPerPlayer: 1,
@@ -248,22 +240,12 @@ const hasFaces = (room) => modeOf(room) !== "classic";
 function faceQuestion(p) {
   return { id: id(), type: "face", playerId: p.id, title: `Copy ${p.name}’s face` };
 }
-// Backwards singing: one player sings, everyone hears it reversed and copies that sound.
-function soundQuestion(p) {
-  return {
-    id: id(),
-    type: "sound",
-    playerId: p.id,
-    title: `Copy ${p.name}’s sound backwards`,
-  };
-}
 function startQuestions(room, now) {
   const mode = modeOf(room);
   room.queue = [];
-  if (mode === "faces" || mode === "sounds") {
-    const make = mode === "faces" ? faceQuestion : soundQuestion;
+  if (mode === "faces") {
     for (let round = 0; round < room.settings.questionsPerPlayer; round++)
-      for (const p of room.players) room.queue.push(make(p));
+      for (const p of room.players) room.queue.push(faceQuestion(p));
   } else {
     const count = Math.min(
       room.settings.questionsPerPlayer,
@@ -279,13 +261,10 @@ function startQuestions(room, now) {
     for (let round = 0; round < count; round++)
       room.players.forEach((p, i) => {
         room.queue.push(buildQuestion(p, answerOrder.get(p.id)[round]));
-        // Mixed: follow each truth question with the next player's face or sound round
-        // (alternating), so nobody goes twice in a row.
+        // Mixed: follow each truth question with the next player's face-off, so nobody poses twice in a row.
         if (mode === "mixed" && round === 0)
           room.queue.push(
-            (i % 2 ? soundQuestion : faceQuestion)(
-              room.players[(i + 1) % room.players.length],
-            ),
+            faceQuestion(room.players[(i + 1) % room.players.length]),
           );
       });
   }
@@ -297,7 +276,7 @@ function openQuestion(room, now) {
   room.votes = {};
   room.shots = {};
   const q = room.queue[room.questionIndex];
-  enter(room, isCopyRound(q) ? "posing" : "voting", now);
+  enter(room, q?.type === "face" ? "posing" : "voting", now);
 }
 function copiersFor(room) {
   const q = room.queue[room.questionIndex];
@@ -329,7 +308,7 @@ function scoreFace(room, now) {
   }
   room.results.push({
     questionId: q.id,
-    type: q.type,
+    type: "face",
     votes,
     tally,
     copies: Object.keys(room.shots).filter((id) => id !== q.playerId),
@@ -440,7 +419,7 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
           fail(MODES.includes(value), "Choose a game type.");
           fail(
             value === "classic" || !room.demo,
-            "Face and sound rounds need real cameras and microphones. Try them with friends.",
+            "Face off needs real cameras. Try it with friends.",
           );
           room.settings.mode = value;
           continue;
@@ -489,19 +468,16 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
         "Everyone needs to choose their age group in the room before starting.",
       );
       if (hasFaces(room)) {
-        fail(
-          !room.demo,
-          "Face and sound rounds need real cameras and microphones. Try them with friends.",
-        );
+        fail(!room.demo, "Face off needs real cameras. Try it with friends.");
         fail(
           !room.players.some((p) => p.ageGroup === "child"),
-          "Face and sound rounds are switched off when a player is under 13. Choose Truth & lies.",
+          "Face off is switched off when a player is under 13. Choose Truth & lies.",
         );
       }
       room.promptPack = promptPackForRoom(room);
       if (room.demo) configureDemo(room);
       room.locked = true;
-      if (["faces", "sounds"].includes(room.settings.mode)) startQuestions(room, now);
+      if (room.settings.mode === "faces") startQuestions(room, now);
       else enter(room, "writing", now);
       break;
     case "answers": {
@@ -612,23 +588,22 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       else nextQuestion(room, now);
       break;
     case "photo": {
-      // Used for both photos (face rounds) and recordings (sound rounds).
-      fail(["posing", "copying"].includes(room.phase), "This round isn’t taking entries right now.");
+      fail(["posing", "copying"].includes(room.phase), "Photos are closed for this round.");
       active();
       const q = room.queue[room.questionIndex];
-      const thing = q.type === "sound" ? "recording" : "photo";
-      fail(data.questionId === q.id, `That ${thing} belongs to a previous round. Refresh and try again.`);
+      fail(data.questionId === q.id, "That photo belongs to a previous round. Refresh and try again.");
       const image = String(data.image ?? "");
       fail(
-        MEDIA_FORMAT[q.type]?.test(image) && image.length <= MAX_PHOTO_LENGTH,
-        `That ${thing} didn’t come through. Try again.`,
+        /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(image) &&
+          image.length <= MAX_PHOTO_LENGTH,
+        "That photo didn’t come through. Try taking it again.",
       );
       if (room.phase === "posing") {
-        fail(me.id === q.playerId, q.type === "sound" ? "Wait for the sound to copy." : "Wait for the face to copy.");
+        fail(me.id === q.playerId, "Wait for the face to copy.");
         room.shots[me.id] = image;
         enter(room, "copying", now);
       } else {
-        fail(me.id !== q.playerId, "You’ve already made the original. Now watch them copy it.");
+        fail(me.id !== q.playerId, "You’ve already pulled the face. Now watch them copy it.");
         room.shots[me.id] = image;
         if (copiersFor(room).every((p) => room.shots[p.id])) openJudging(room, now);
       }
@@ -820,7 +795,7 @@ export function photosFor(room, token, now = Date.now()) {
   const me = authorize(room, token, now),
     q = room.queue[room.questionIndex],
     shots = room.shots ?? {};
-  if (!isCopyRound(q)) return { questionId: null, photos: {} };
+  if (q?.type !== "face") return { questionId: null, photos: {} };
   const visible =
     room.phase === "copying"
       ? [q.playerId, me.id]
