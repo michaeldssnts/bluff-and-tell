@@ -17,7 +17,9 @@ Correct guesses earn 2 points. Each person who picks your own lie earns you 1 po
 
 - Private rooms with invite links and room codes.
 - Questions suited to each player's age group.
-- Adjustable timers and quick or full games.
+- No timers: each step moves on as soon as everyone is ready.
+- Quick or full games.
+- Confetti and a shareable victory card at the end.
 - A solo demo to try the game.
 - Downloadable social cards to recommend the game.
 

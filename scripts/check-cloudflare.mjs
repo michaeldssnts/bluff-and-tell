@@ -81,7 +81,8 @@ await Promise.all(
 const view = await call(base, undefined, host.token);
 assert.equal(view.room.ownAnswers.length, 1);
 assert.equal(JSON.stringify(view).includes(guest.truth), false);
-let voting = await action(host, "begin");
+// Both players locked in, so the game has already started itself.
+let voting = view;
 for (let round = 0; round < 2; round++) {
   assert.equal(voting.room.phase, "voting");
   const q = voting.room.question;
@@ -107,7 +108,7 @@ for (let round = 0; round < 2; round++) {
   const revealed = await call(base, undefined, host.token);
   assert.equal(revealed.room.phase, "reveal");
   assert.equal(revealed.room.result.truthId, option.id);
-  await action(host, "next");
+  // Results have no timer: the host skips ahead to the next question.
   voting = await action(host, "next");
   if (round === 1) {
     assert.equal(voting.room.phase, "finished");

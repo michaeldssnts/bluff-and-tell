@@ -15,6 +15,10 @@ import {
 } from "../server/prompts.mjs";
 const at = 1800000000000;
 const firstPrompt = (room, token) => snapshot(room, token, at).prompts[0].id;
+// The game starts itself once everyone has locked in; the host only presses begin to start early.
+const begin = (room, token) => {
+  if (room.phase === "writing") apply(room, token, "begin", {}, at);
+};
 function group() {
   const { room, token } = newRoom("Mia", false, at);
   const b = joinRoom(room, "Tumi", at),
@@ -42,12 +46,13 @@ function prepared() {
       at,
     ),
   );
-  apply(g.room, g.tokens[0], "begin", {}, at);
+  begin(g.room, g.tokens[0]);
   return g;
 }
-// Voting has no timer, so move past it the way a host would: by closing voting.
+// Voting and the reveal have no timer, so move past them the way a host would.
 function advance(room, hostToken) {
-  if (room.phase === "voting") apply(room, hostToken, "next", {}, at);
+  if (room.phase === "voting" || room.phase === "reveal")
+    apply(room, hostToken, "next", {}, at);
   else tick(room, room.deadline);
 }
 function voting(g, index = 0) {
@@ -127,10 +132,10 @@ test("cannot start questions while a player has no complete answer", () => {
     () => apply(g.room, g.tokens[0], "begin", {}, at),
     /Everyone needs/,
   );
-  tick(g.room, g.room.deadline);
-  assert.equal(g.room.phase, "writing");
+  // No writing timer: the room simply waits for answers.
   assert.equal(g.room.deadline, null);
-  assert.equal(g.room.needsAnswers, true);
+  tick(g.room, at + 3600000);
+  assert.equal(g.room.phase, "writing");
 });
 test("pause freezes deadlines, blocks votes, and resume preserves remaining time", () => {
   const g = voting(prepared()),
@@ -287,8 +292,9 @@ test("voting has no timer and waits for everyone; other phases still catch up", 
   assert.equal(g.room.deadline, at + 3000);
   tick(g.room, at + 3600000);
   assert.equal(g.room.results.length, 1);
-  assert.equal(g.room.phase, "voting");
-  assert.equal(g.room.questionIndex, 1);
+  // The results stay up with no timer until everyone taps Next.
+  assert.equal(g.room.phase, "reveal");
+  assert.equal(g.room.deadline, null);
 });
 test("only the host can close voting early", () => {
   const g = prepared();
@@ -313,7 +319,7 @@ test("demo bots vote straight away so results show without a timer", () => {
     },
     at,
   );
-  apply(room, token, "begin", {}, at);
+  begin(room, token);
   let mineSeen = false;
   for (let i = 0; i < 20 && room.phase !== "finished"; i++) {
     if (room.phase === "voting") {
@@ -328,6 +334,14 @@ test("demo bots vote straight away so results show without a timer", () => {
         apply(room, token, "vote", { questionId: q.id, optionId: q.options[0].id }, at);
         assert.equal(room.deadline, at + 3000);
       }
+    }
+    if (room.phase === "reveal") {
+      // Bots are ready straight away, so the human tapping Next moves the game on.
+      tick(room, at);
+      const index = room.questionIndex;
+      apply(room, token, "ready-next", {}, at);
+      assert.ok(room.questionIndex === index + 1 || room.phase === "finished");
+      continue;
     }
     tick(room, room.deadline);
   }
@@ -406,7 +420,7 @@ test("authors can review and swap decoys without changing their true answer", ()
     other = snapshot(g.room, g.tokens[1], at);
   assert.deepEqual(own.ownAnswers[0].decoys, p.answers[0].decoys);
   assert.equal(other.ownAnswers[0].truth, "True job 1");
-  apply(g.room, g.tokens[0], "begin", {}, at);
+  begin(g.room, g.tokens[0]);
   assert.ok(
     g.room.queue[0].options.some((o) => o.text === p.answers[0].decoys[0]),
   );
@@ -505,7 +519,7 @@ test("a complete mixed-age game builds and scores questions from all three sets"
       },
       at,
     );
-  apply(room, token, "begin", {}, at);
+  begin(room, token);
   assert.deepEqual(
     room.queue.map((q) => q.promptId),
     selections.map(([, id]) => id),
@@ -567,7 +581,7 @@ test("a two-player game alternates roles, keeps votes private and scores correct
       },
       at,
     );
-  apply(room, token, "begin", {}, at);
+  begin(room, token);
   assert.equal(room.queue.length, 2);
   assert.equal(room.phase, "voting");
   let q = room.queue[0],
@@ -595,8 +609,12 @@ test("a two-player game alternates roles, keeps votes private and scores correct
     room.players.map((p) => p.score),
     [2, 0],
   );
-  apply(room, token, "next", {}, room.deadline - 1);
-  apply(room, token, "next", {}, room.deadline - 1);
+  // Results stay up until both players tap Next.
+  assert.equal(room.deadline, null);
+  apply(room, token, "ready-next", {}, at);
+  assert.equal(room.phase, "reveal");
+  assert.deepEqual(snapshot(room, partner, at).nextReadyIds, [room.players[0].id]);
+  apply(room, partner, "ready-next", {}, at);
   assert.equal(room.queue[room.questionIndex].playerId, room.players[1].id);
   assert.equal(room.phase, "voting");
   q = room.queue[1];
@@ -616,8 +634,8 @@ test("a two-player game alternates roles, keeps votes private and scores correct
     room.players.map((p) => p.score),
     [4, 0],
   );
-  apply(room, token, "next", {}, room.deadline - 1);
-  apply(room, token, "next", {}, room.deadline - 1);
+  // The host can skip ahead without waiting for everyone.
+  apply(room, token, "next", {}, at);
   assert.equal(room.phase, "finished");
   assert.equal(snapshot(room, partner, room.expiresAt - 1).history.length, 2);
 });
@@ -637,7 +655,7 @@ test("the only voter can change their mind before the shortened deadline", () =>
       },
       at,
     );
-  apply(room, token, "begin", {}, at);
+  begin(room, token);
   assert.equal(room.phase, "voting");
   const q = room.queue[0],
     when = room.deadline - 10000;
@@ -686,7 +704,7 @@ test("a two-player full game gives each person two questions, including mixed ag
       at,
     );
   }
-  apply(room, token, "begin", {}, at);
+  begin(room, token);
   assert.equal(room.queue.length, 4);
   assert.deepEqual(
     room.queue.map((q) => q.playerId),
@@ -744,7 +762,7 @@ test("all-26-plus rooms get the extra-silly pack and can finish a game", () => {
       at,
     );
   }
-  apply(room, token, "begin", {}, at);
+  begin(room, token);
   assert.equal(room.queue.length, 2);
   finish(room, token);
   assert.equal(room.phase, "finished");
@@ -842,4 +860,58 @@ test("the featured player gets a bonus when nobody spots their truth", () => {
   r = scoreFor([]);
   assert.equal(r.subject, 0);
   assert.equal(r.result.stumpBonus, 0);
+});
+
+test("only players can be ready at the reveal, and Next is refused before results", () => {
+  const g = prepared();
+  assert.throws(() => apply(g.room, g.tokens[1], "ready-next", {}, at), /results first/);
+  apply(g.room, g.tokens[0], "next", {}, at);
+  assert.equal(g.room.phase, "reveal");
+  assert.throws(() => apply(g.room, g.tokens[0], "extend", {}, at), /No timer/);
+  apply(g.room, g.tokens[1], "ready-next", {}, at);
+  apply(g.room, g.tokens[2], "ready-next", {}, at);
+  assert.equal(g.room.phase, "reveal");
+  apply(g.room, g.tokens[0], "ready-next", {}, at);
+  assert.equal(g.room.phase, "voting");
+  assert.equal(g.room.questionIndex, 1);
+  assert.deepEqual(snapshot(g.room, g.tokens[0], at).nextReadyIds, []);
+});
+
+test("the game starts by itself once everyone has locked in their answers", () => {
+  const g = group();
+  apply(g.room, g.tokens[0], "start", {}, at);
+  assert.equal(g.room.deadline, null);
+  g.tokens.forEach((t, i) => {
+    assert.equal(g.room.phase, "writing");
+    apply(
+      g.room,
+      t,
+      "answers",
+      {
+        answers: [{ promptId: firstPrompt(g.room, t), truth: "Real " + i, lie: "Fake " + i }],
+        submitted: true,
+      },
+      at,
+    );
+  });
+  assert.equal(g.room.phase, "voting");
+  assert.equal(g.room.queue.length, 3);
+});
+test("saving answers without locking in does not start the game", () => {
+  const g = group();
+  apply(g.room, g.tokens[0], "start", {}, at);
+  g.tokens.forEach((t, i) =>
+    apply(
+      g.room,
+      t,
+      "answers",
+      { answers: [{ promptId: firstPrompt(g.room, t), truth: "Real " + i, lie: "Fake " + i }] },
+      at,
+    ),
+  );
+  assert.equal(g.room.phase, "writing");
+  tick(g.room, at + 3600000);
+  assert.equal(g.room.phase, "writing");
+  apply(g.room, g.tokens[0], "begin", {}, at);
+  assert.equal(g.room.phase, "voting");
 });

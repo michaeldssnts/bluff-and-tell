@@ -171,12 +171,19 @@ export function joinRoom(
 }
 function enter(room, phase, now) {
   room.phase = phase;
-  // Voting has no timer: results show once everyone has voted (or the host closes voting).
-  room.deadline =
-    phase === "finished" || phase === "lobby" || phase === "voting"
-      ? null
-      : now + room.settings[phase] * 1000;
+  // No timers in a new game: writing ends when everyone is ready, voting when everyone
+  // has voted, and the reveal when everyone taps Next. Older rooms mid-way through
+  // a reading, discussion or story phase still finish on their timer.
+  room.deadline = ["reading", "discussion", "story"].includes(phase)
+    ? now + room.settings[phase] * 1000
+    : null;
   room.pausedRemaining = null;
+  room.nextReady = {};
+}
+// At the reveal, each player taps Next; the room moves on once everyone has.
+function moveOnIfEveryoneReady(room, now) {
+  if (room.phase !== "reveal" || room.pausedRemaining !== null) return;
+  if (room.players.every((p) => room.nextReady?.[p.id])) nextQuestion(room, now);
 }
 // Everyone except the player the question is about.
 function votersFor(room) {
@@ -274,6 +281,7 @@ function score(room, now) {
 }
 function nextQuestion(room, now) {
   room.questionIndex++;
+  room.nextReady = {};
   room.votes = {};
   if (room.questionIndex >= room.queue.length) enter(room, "finished", now);
   else enter(room, "voting", now);
@@ -290,6 +298,10 @@ export function tick(room, now = Date.now()) {
             q.options[(i + room.questionIndex) % q.options.length].id;
       });
     closeIfEveryoneVoted(room, now);
+  }
+  if (room.demo && room.phase === "reveal") {
+    room.nextReady ??= {};
+    room.players.filter((p) => p.bot).forEach((p) => (room.nextReady[p.id] = true));
   }
   if (!room.deadline) return;
   for (
@@ -412,6 +424,11 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       });
       fail(me.answers.length > 0, "Add at least one complete pair.");
       me.submitted = Boolean(data.submitted);
+      // Start as soon as everyone has locked in their answers.
+      if (room.players.every((p) => p.submitted)) {
+        startQuestions(room, now);
+        room.needsAnswers = false;
+      }
       break;
     }
     case "reroll": {
@@ -467,13 +484,19 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       if (room.phase === "voting") score(room, now);
       else if (room.phase === "reading") enter(room, "discussion", now);
       else if (room.phase === "discussion") enter(room, "voting", now);
-      else if (room.phase === "reveal") enter(room, "story", now);
       else nextQuestion(room, now);
+      break;
+    case "ready-next":
+      fail(room.phase === "reveal", "Wait for the results first.");
+      active();
+      room.nextReady ??= {};
+      room.nextReady[me.id] = true;
+      moveOnIfEveryoneReady(room, now);
       break;
     case "extend":
       host();
       fail(
-        !["lobby", "finished", "voting"].includes(room.phase),
+        ["reading", "discussion", "story"].includes(room.phase),
         "No timer to extend.",
       );
       if (room.pausedRemaining !== null) room.pausedRemaining += 60000;
@@ -610,6 +633,8 @@ export function snapshot(room, token, now = Date.now()) {
     myVote: room.votes[me.id] ?? null,
     votedCount: Object.keys(room.votes).length,
     votedIds: room.phase === "voting" ? Object.keys(room.votes) : [],
+    nextReadyIds:
+      room.phase === "reveal" ? Object.keys(room.nextReady ?? {}) : [],
     result,
     history:
       room.phase === "finished"
