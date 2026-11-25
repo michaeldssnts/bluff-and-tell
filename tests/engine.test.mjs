@@ -6,6 +6,7 @@ import {
   apply,
   tick,
   snapshot,
+  photosFor,
   GameError,
 } from "../server/engine.mjs";
 import {
@@ -924,4 +925,139 @@ test("any player can call a rematch from the final scores", () => {
   assert.equal(g.room.phase, "lobby");
   assert.equal(g.room.players.length, 3);
   assert.ok(g.room.players.every((p) => p.score === 0));
+});
+
+// ---- Face off ----
+const photo = (tag = "A") => "data:image/jpeg;base64," + tag.repeat(40);
+function faceGame(mode = "faces") {
+  const g = group();
+  apply(g.room, g.tokens[0], "settings", { mode }, at);
+  apply(g.room, g.tokens[0], "start", {}, at);
+  return g;
+}
+const tokenOf = (g, playerId) =>
+  g.tokens[g.room.players.findIndex((p) => p.id === playerId)];
+test("a face-off round: pose, copy, judge, reveal, then photos are cleared", () => {
+  const g = faceGame();
+  assert.equal(g.room.phase, "posing");
+  assert.equal(g.room.queue.length, 3);
+  const q = g.room.queue[0],
+    poser = tokenOf(g, q.playerId),
+    copiers = g.tokens.filter((t) => t !== poser);
+  // Nobody sees anything before the poser has taken their photo.
+  assert.deepEqual(photosFor(g.room, copiers[0], at).photos, {});
+  assert.throws(
+    () => apply(g.room, copiers[0], "photo", { questionId: q.id, image: photo() }, at),
+    /Wait for the face/,
+  );
+  apply(g.room, poser, "photo", { questionId: q.id, image: photo("P") }, at);
+  assert.equal(g.room.phase, "copying");
+  // While copying, you see the face to copy and your own copy, never anyone else's.
+  apply(g.room, copiers[0], "photo", { questionId: q.id, image: photo("X") }, at);
+  const firstId = g.room.players[g.tokens.indexOf(copiers[0])].id,
+    secondId = g.room.players[g.tokens.indexOf(copiers[1])].id;
+  assert.deepEqual(
+    Object.keys(photosFor(g.room, copiers[1], at).photos),
+    [q.playerId],
+  );
+  assert.deepEqual(
+    Object.keys(photosFor(g.room, copiers[0], at).photos).sort(),
+    [q.playerId, firstId].sort(),
+  );
+  apply(g.room, copiers[1], "photo", { questionId: q.id, image: photo("Y") }, at);
+  assert.equal(g.room.phase, "judging");
+  assert.equal(Object.keys(photosFor(g.room, copiers[1], at).photos).length, 3);
+  // You can't vote for yourself or for the face being copied.
+  assert.throws(
+    () => apply(g.room, copiers[0], "face-vote", { questionId: q.id, playerId: firstId }, at),
+    /own photo/,
+  );
+  assert.throws(
+    () => apply(g.room, copiers[0], "face-vote", { questionId: q.id, playerId: q.playerId }, at),
+    /one of the copies/,
+  );
+  apply(g.room, poser, "face-vote", { questionId: q.id, playerId: firstId }, at);
+  apply(g.room, copiers[0], "face-vote", { questionId: q.id, playerId: secondId }, at);
+  assert.equal(g.room.deadline, null);
+  apply(g.room, copiers[1], "face-vote", { questionId: q.id, playerId: firstId }, at);
+  assert.equal(g.room.deadline, at + 3000);
+  tick(g.room, g.room.deadline);
+  assert.equal(g.room.phase, "reveal");
+  const result = g.room.results[0];
+  assert.equal(result.type, "face");
+  assert.equal(result.tally[firstId], 2);
+  assert.equal(g.room.players.find((p) => p.id === firstId).score, 4);
+  assert.equal(g.room.players.find((p) => p.id === secondId).score, 2);
+  g.tokens.forEach((t) => apply(g.room, t, "ready-next", {}, at));
+  assert.equal(g.room.phase, "posing");
+  assert.deepEqual(g.room.shots, {});
+});
+test("face off is off for under-13s and in the demo", () => {
+  const { room, token } = newRoom("Parent", false, at, "adult");
+  joinRoom(room, "Robin", at, "child");
+  apply(room, token, "settings", { mode: "faces" }, at);
+  assert.throws(() => apply(room, token, "start", {}, at), /under 13/);
+  const demo = newRoom("Solo", true, at, "adult");
+  assert.throws(
+    () => apply(demo.room, demo.token, "settings", { mode: "mixed" }, at),
+    /real cameras/,
+  );
+  assert.throws(
+    () => apply(demo.room, demo.token, "settings", { mode: "silly" }, at),
+    /game type/,
+  );
+});
+test("photos must be small JPEGs for the current round", () => {
+  const g = faceGame();
+  const q = g.room.queue[0],
+    poser = tokenOf(g, q.playerId);
+  for (const image of ["data:image/png;base64,AAAA", "<script>", photo("A".repeat(2000))])
+    assert.throws(
+      () => apply(g.room, poser, "photo", { questionId: q.id, image }, at),
+      /didn’t come through/,
+    );
+  assert.throws(
+    () => apply(g.room, poser, "photo", { questionId: "old", image: photo() }, at),
+    /previous round/,
+  );
+});
+test("the host can skip a missing poser or close photos early", () => {
+  const g = faceGame();
+  const first = g.room.queue[0];
+  apply(g.room, g.tokens[0], "next", {}, at);
+  assert.equal(g.room.questionIndex, 1);
+  assert.equal(g.room.phase, "posing");
+  const q = g.room.queue[1],
+    poser = tokenOf(g, q.playerId);
+  apply(g.room, poser, "photo", { questionId: q.id, image: photo() }, at);
+  apply(g.room, g.tokens[0], "next", {}, at);
+  // Nobody copied, so there is nothing to judge: straight to the results.
+  assert.equal(g.room.phase, "reveal");
+  assert.notEqual(first.id, q.id);
+});
+test("mixed games add one face-off per player after the writing step", () => {
+  const g = group();
+  apply(g.room, g.tokens[0], "settings", { mode: "mixed" }, at);
+  apply(g.room, g.tokens[0], "start", {}, at);
+  assert.equal(g.room.phase, "writing");
+  g.tokens.forEach((t, i) =>
+    apply(
+      g.room,
+      t,
+      "answers",
+      {
+        answers: [{ promptId: firstPrompt(g.room, t), truth: "Real " + i, lie: "Fake " + i }],
+        submitted: true,
+      },
+      at,
+    ),
+  );
+  const types = g.room.queue.map((q) => q.type ?? "truth");
+  assert.equal(types.filter((t) => t === "face").length, 3);
+  assert.equal(types.filter((t) => t === "truth").length, 3);
+  assert.equal(g.room.phase, "voting");
+  // Nobody poses straight after their own truth question.
+  g.room.queue.forEach((q, i) => {
+    if (q.type === "face") assert.notEqual(q.playerId, g.room.queue[i - 1].playerId);
+  });
 });

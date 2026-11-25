@@ -2281,3 +2281,145 @@ textarea[aria-invalid="true"] {
   margin: 0;
   font-size: 0.875rem;
 }
+
+/* ---- Face off ---- */
+.face-cta,
+.face-wait {
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  text-align: center;
+  padding: 8px 0 16px;
+}
+.face-cta p,
+.face-wait p {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.face-wait strong {
+  color: var(--ink);
+}
+.photo-button {
+  min-height: 56px;
+  font-size: 1.05rem;
+}
+.face-photo {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.face-photo img,
+.face-placeholder {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 16px;
+  border: 2px solid #ffffff20;
+  background: #1d102f;
+}
+.face-placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.face-photo figcaption {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--muted);
+}
+.face-photo figcaption b {
+  color: var(--lime);
+}
+.face-target {
+  max-width: 280px;
+  margin: 0 auto 16px;
+}
+.face-photo.target img {
+  border-color: var(--lime);
+  box-shadow: 4px 5px 0 #170c2b;
+  transform: rotate(-2deg);
+}
+.face-photo.target figcaption {
+  color: var(--ink);
+  font-size: 1rem;
+}
+.face-mine {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 16px;
+  align-items: center;
+  margin-top: 8px;
+}
+.face-mine .next-status {
+  margin-bottom: 8px;
+}
+.face-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.face-choice {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.face-choice.chosen .face-photo img {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 2px var(--purple);
+}
+.face-own {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+.face-photo.winner img {
+  border-color: var(--lime);
+  box-shadow: 0 0 0 3px var(--lime);
+}
+.face-headline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 1.1rem;
+  text-align: center;
+}
+.face-headline strong {
+  color: var(--lime);
+}
+.face-headline svg {
+  color: var(--lime);
+}
+.face-rule {
+  text-align: center;
+  font-size: 0.875rem;
+  margin: 12px 0 0;
+}
+.center {
+  text-align: center;
+}
+@media (max-width: 680px) {
+  .face-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .face-mine {
+    grid-template-columns: 96px 1fr;
+  }
+}
+.host-controls {
+  flex-wrap: wrap;
+}
+.host-controls .host-transfer-label,
+.host-controls .host-transfer {
+  flex-basis: 100%;
+}

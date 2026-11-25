@@ -330,3 +330,35 @@ test("API carries recent question history into new rooms and joining players", a
   assert(joined.data.room.prompts.every((p) => !recent.includes(p.id)));
   assert(!JSON.stringify(joined.data).includes('"promptHistory"'));
 });
+test("face-off photos upload through the API and are only shown when allowed", async (t) => {
+  const { call } = await setup(t);
+  const host = (await call("/api/rooms", "POST", { ageGroup: "adult", name: "Mia" })).data;
+  const base = "/api/rooms/" + host.room.code;
+  const guest = (await call(base + "/join", "POST", { ageGroup: "adult", name: "Tumi" })).data;
+  const act = (token, action, data = {}) =>
+    call(base + "/action", "POST", { action, data, requestId: randomUUID() }, token);
+  await act(host.token, "settings", { mode: "faces" });
+  const started = await act(host.token, "start");
+  assert.equal(started.data.room.phase, "posing");
+  const q = started.data.room.question;
+  assert.equal(q.type, "face");
+  const poser = q.playerId === host.room.me ? host : guest,
+    copier = poser === host ? guest : host;
+  // A realistic resized photo is ~20-50 KB, more than the old 16 KB request limit.
+  const image = "data:image/jpeg;base64," + "A".repeat(40000);
+  const posed = await act(poser.token, "photo", { questionId: q.id, image });
+  assert.equal(posed.status, 200);
+  assert.equal(posed.data.room.phase, "copying");
+  assert.deepEqual(posed.data.room.shotIds, [poser.room.me]);
+  // Snapshots never carry the photos themselves.
+  assert.equal(JSON.stringify(posed.data).includes("A".repeat(100)), false);
+  const seen = await call(base + "/photos", "GET", undefined, copier.token);
+  assert.equal(seen.status, 200);
+  assert.deepEqual(Object.keys(seen.data.photos), [poser.room.me]);
+  const tooBig = await act(copier.token, "photo", {
+    questionId: q.id,
+    image: "data:image/jpeg;base64," + "A".repeat(70000),
+  });
+  assert.equal(tooBig.status, 413);
+  assert.equal((await call(base + "/photos", "GET", undefined, "nope")).status, 401);
+});
