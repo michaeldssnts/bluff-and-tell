@@ -16,7 +16,7 @@
     "cloudflare:check": "wrangler --config wrangler.jsonc deploy --env staging --dry-run --outdir .wrangler/build",
     "cloudflare:deploy:staging": "wrangler --config wrangler.jsonc deploy --env staging",
     "cloudflare:deploy:production": "wrangler --config wrangler.jsonc deploy --env production",
-    "cloudflare:login": "wrangler --config wrangler.jsonc login",
+    "cloudflare:login": "wrangler login --device",
     "cloudflare:test": "node scripts/check-cloudflare.mjs"
   },
   "devDependencies": {

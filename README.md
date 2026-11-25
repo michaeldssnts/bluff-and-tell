@@ -84,7 +84,7 @@ npm run cloudflare:login -- --scopes account:read user:read workers_scripts:writ
 npm run cloudflare:deploy:staging
 ```
 
-Approve the official Cloudflare OAuth screen yourself. Do not paste keys into chat or commit account credentials. If asked, choose a free `workers.dev` account subdomain. The deployment prints the resulting HTTPS address. Verify health and run `node scripts/check-cloudflare.mjs https://THE-RETURNED-STAGING-ADDRESS` before sharing widely. Also join from two devices on different internet connections.
+The login command uses a short device code instead of a localhost callback. Approve the official Cloudflare OAuth screen yourself. Do not paste keys into chat or commit account credentials. If asked, choose a free `workers.dev` account subdomain. The deployment prints the resulting HTTPS address. Verify health and run `node scripts/check-cloudflare.mjs https://THE-RETURNED-STAGING-ADDRESS` before sharing widely. Also join from two devices on different internet connections.
 
 Cloudflare's Workers Free plan has request and CPU limits; SQLite Durable Objects have separate request, duration and storage limits. Static asset requests are free. Free limits can stop operations until reset. The current frontend polls every two seconds, so eight connected players use roughly 14,400 polling requests per hour, plus actions. Monitor actual usage during the beta; the free plan is intended here for small play-tests, not unlimited concurrent games. A paid upgrade must be a deliberate choice.
 
