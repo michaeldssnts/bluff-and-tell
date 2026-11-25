@@ -10,7 +10,7 @@
     "dev": "node server/local.mjs",
     "start": "node server/local.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check public/app.js && node --check server/engine.mjs && node --check server/api.mjs && node --check server/store.mjs && node --check server/local.mjs && node --check server/cloudflare.mjs && node --check server/cloudflare-store.mjs && node --check public/share-card.js && node --check server/prompts.mjs && node --check server/extra-prompts.mjs",
+    "check": "node --check public/app.js && node --check public/game-options.js && node --check server/engine.mjs && node --check server/api.mjs && node --check server/store.mjs && node --check server/local.mjs && node --check server/cloudflare.mjs && node --check server/cloudflare-store.mjs && node --check public/share-card.js && node --check server/prompts.mjs && node --check server/extra-prompts.mjs",
     "aws:build": "sam build --template-file infrastructure/template.yaml",
     "cloudflare:dev": "wrangler --config wrangler.jsonc dev --env staging",
     "cloudflare:check": "wrangler --config wrangler.jsonc deploy --env staging --dry-run --outdir .wrangler/build",

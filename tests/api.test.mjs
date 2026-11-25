@@ -397,7 +397,7 @@ test("new web flow creates and joins without age, starts mixed rounds and surviv
     token,
   );
   assert.equal(started.status, 200);
-  assert.equal(started.data.room.question.total, 6);
+  assert.equal(started.data.room.question.total, 10);
   assert.notEqual(started.data.room.phase, "lobby");
   const reconnected = await call(base, "GET", null, joined.data.token);
   assert.equal(reconnected.status, 200);

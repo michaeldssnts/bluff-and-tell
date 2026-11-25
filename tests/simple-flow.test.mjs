@@ -10,7 +10,7 @@ import {
 } from "../server/engine.mjs";
 import { promptPoolForPlayer } from "../server/prompts.mjs";
 const now = 1800000000000;
-function setup(mode = "mixed", count = 6) {
+function setup(mode = "mixed", count = 10) {
   const { room, token } = newRoom("Mia", false, now, null);
   enableSimpleFlow(room);
   const guest = joinRoom(room, "Tumi", now, null);
@@ -20,9 +20,9 @@ function setup(mode = "mixed", count = 6) {
 }
 test("new flow needs no age profile and mixes all activities in balanced trios", () => {
   for (let i = 0; i < 12; i++) {
-    const { room } = setup("mixed", 12);
-    assert.equal(room.queue.length, 12);
-    for (let j = 0; j < 12; j += 3)
+    const { room } = setup("mixed", 30);
+    assert.equal(room.queue.length, 30);
+    for (let j = 0; j < 30; j += 3)
       assert.deepEqual(
         new Set(room.queue.slice(j, j + 3).map((q) => q.type)),
         new Set(["truth", "face", "doodle"]),
@@ -36,8 +36,8 @@ test("new flow needs no age profile and mixes all activities in balanced trios",
   }
 });
 test("one truth question is authored, voted, revealed and acknowledged before the next", () => {
-  const { room, tokens } = setup("classic", 6);
-  for (let index = 0; index < 6; index++) {
+  const { room, tokens } = setup("classic", 5);
+  for (let index = 0; index < 5; index++) {
     assert.equal(room.phase, "writing");
     assert.equal(room.questionIndex, index);
     const author = index % 2,
@@ -96,7 +96,7 @@ test("one truth question is authored, voted, revealed and acknowledged before th
     apply(room, tokens[1], "ready-next", {}, now + 10000);
   }
   assert.equal(room.phase, "finished");
-  assert.equal(room.results.length, 6);
+  assert.equal(room.results.length, 5);
 });
 test("new prompt pool is broad, shared without age, and excludes work prompts", () => {
   const { room } = setup();
@@ -111,13 +111,13 @@ test("round count is validated and each single activity mode honours it", () => 
     ["doodles", "doodle"],
     ["classic", "truth"],
   ]) {
-    const { room } = setup(mode, 9);
-    assert.equal(room.queue.length, 9);
+    const { room } = setup(mode, 20);
+    assert.equal(room.queue.length, 20);
     assert(room.queue.every((q) => q.type === type));
   }
   const { room, token } = newRoom("Mia", false, now, null);
   enableSimpleFlow(room);
-  for (const totalRounds of [0, 2, 25, 6.5])
+  for (const totalRounds of [0, 2, 6, 25, 31, 6.5])
     assert.throws(() => apply(room, token, "settings", { totalRounds }, now));
 });
 test("demo completes sequential questions and replay keeps the simpler lobby", () => {
@@ -145,10 +145,10 @@ test("demo completes sequential questions and replay keeps the simpler lobby", (
 });
 
 test("a two-player party mix completes photos, drawings and truths without skipping results", () => {
-  const { room, tokens } = setup("mixed", 6);
+  const { room, tokens } = setup("mixed", 10);
   let clock = now;
   const image = "data:image/jpeg;base64,/9j/2Q==";
-  for (let round = 0; round < 6; round++) {
+  for (let round = 0; round < 10; round++) {
     const q = room.queue[round],
       author = room.players.findIndex((p) => p.id === q.playerId);
     if (q.type === "truth") {

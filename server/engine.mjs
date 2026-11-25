@@ -1,3 +1,4 @@
+import { GAME_LENGTHS } from "../public/game-options.js";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import {
   PROMPTS,
@@ -282,7 +283,7 @@ const isPhotoRound = (q) => ["face", "doodle"].includes(q?.type);
 export function enableSimpleFlow(room) {
   room.flowVersion = 2;
   room.settings.mode = room.demo ? "classic" : "mixed";
-  room.settings.totalRounds = 6;
+  room.settings.totalRounds = 10;
   room.players.forEach((p) => {
     p.ageGroup = null;
   });
@@ -290,7 +291,7 @@ export function enableSimpleFlow(room) {
 function startSimpleGame(room, now) {
   const used = new Set(),
     mode = modeOf(room);
-  const count = room.settings.totalRounds ?? 6;
+  const count = room.settings.totalRounds ?? 10;
   // Shuffle each trio so all three activities appear before a type repeats.
   const types = [];
   while (types.length < count) {
@@ -490,6 +491,13 @@ function nextQuestion(room, now) {
   else openQuestion(room, now);
 }
 export function tick(room, now = Date.now()) {
+  // Update old lobbies; never change the length of a game already underway.
+  if (
+    room.flowVersion === 2 &&
+    room.phase === "lobby" &&
+    !GAME_LENGTHS.includes(room.settings.totalRounds)
+  )
+    room.settings.totalRounds = 10;
   if (room.pausedRemaining !== null) return;
   if (room.demo && room.phase === "voting") {
     const q = room.queue[room.questionIndex];
@@ -558,10 +566,7 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
         }
         if (name === "totalRounds" && room.flowVersion === 2) {
           const count = Number(value);
-          fail(
-            Number.isInteger(count) && count >= 3 && count <= 24,
-            "Choose 3 to 24 rounds.",
-          );
+          fail(GAME_LENGTHS.includes(count), "Pick 5, 10, 20 or 30 questions.");
           room.settings.totalRounds = count;
           continue;
         }
