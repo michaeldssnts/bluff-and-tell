@@ -28,6 +28,15 @@ async function call(path, data, token = "", expected = 200) {
 }
 const health = await call("/api/health");
 assert.equal(health.ok, true);
+const adminPage = await fetch(new URL("/admin", origin));
+assert.equal(adminPage.status, 200);
+assert((await adminPage.text()).includes('id="login-form"'));
+const privateUsage = await fetch(new URL("/api/admin/usage", origin));
+assert(
+  [401, 503].includes(privateUsage.status),
+  "Admin usage must never be public",
+);
+assert.equal(privateUsage.headers.get("cache-control"), "no-store");
 const html = await fetch(origin);
 assert.equal(html.status, 200);
 assert((await html.text()).includes("Bluff & Tell"));

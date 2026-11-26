@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#291745" />
+    <title>Backstage · Bluff &amp; Tell</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/admin.css" />
+    <script type="module" src="/admin.js"></script>
+  </head>
+  <body>
+    <main class="admin-shell">
+      <header class="admin-header">
+        <a href="/" class="admin-brand">Bluff <span>&amp;</span> Tell</a
+        ><span class="admin-tag">BACKSTAGE</span>
+      </header>
+      <section id="login" class="login-panel">
+        <span class="eyebrow">JUST FOR YOU</span>
+        <h1>Is the party<br />getting started?</h1>
+        <p class="admin-muted">Sign in for a peek at the numbers.</p>
+        <form id="login-form">
+          <label for="username">Email</label>
+          <input
+            type="email"
+            id="username"
+            autocomplete="username"
+            required
+            maxlength="254"
+          />
+          <label for="password">Admin password</label>
+          <input
+            type="password"
+            id="password"
+            autocomplete="current-password"
+            required
+            maxlength="256"
+          />
+          <button class="button primary full" id="sign-in">Let me in →</button>
+        </form>
+      </section>
+      <section id="dashboard" hidden aria-label="Usage dashboard">
+        <div class="dashboard-heading">
+          <div>
+            <span class="eyebrow">THE PARTY PULSE</span>
+            <h1>Look who’s playing.</h1>
+            <p class="admin-muted">
+              A little insight. Everyone’s secrets stay in the room.
+            </p>
+          </div>
+          <button class="button secondary" id="sign-out">Sign out</button>
+        </div>
+        <div class="dashboard-toolbar">
+          <label for="period"
+            >Show me
+            <select id="period">
+              <option value="1">Today (UTC)</option>
+              <option value="7" selected>Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select></label
+          >
+          <div>
+            <button class="button secondary" id="refresh">Refresh ↻</button
+            ><span id="updated" class="admin-muted"></span>
+          </div>
+        </div>
+        <div id="stats" class="admin-stats"></div>
+        <section class="admin-panel" aria-labelledby="trend-title">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">ROOMS CREATED</span>
+              <h2 id="trend-title">More room for mischief.</h2>
+            </div>
+            <span class="admin-muted">Daily totals · UTC</span>
+          </div>
+          <div id="trend" class="trend"></div>
+        </section>
+        <div class="activity-panels">
+          <section class="admin-panel" aria-labelledby="activity-title">
+            <h2 id="activity-title">What’s going down?</h2>
+            <div id="activity" class="activity-grid"></div>
+          </section>
+          <section class="admin-panel" aria-labelledby="duration-title">
+            <h2 id="duration-title">How long’s the fun?</h2>
+            <div id="duration"></div>
+          </section>
+        </div>
+        <section class="admin-panel" aria-labelledby="rooms-title">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">LAST 24 HOURS</span>
+              <h2 id="rooms-title">Inside the rooms.</h2>
+            </div>
+            <label class="filter-label" for="room-filter"
+              >View
+              <select id="room-filter">
+                <option value="all">All rooms</option>
+                <option value="active">Recently active</option>
+                <option value="finished">Finished</option>
+                <option value="lobby">In the lobby</option>
+              </select></label
+            >
+          </div>
+          <p class="admin-muted small">
+            Anonymous references, never join codes. “Recently active” means an
+            action in the last 5 minutes.
+          </p>
+          <div id="rooms"></div>
+        </section>
+        <p class="admin-muted small retention-note">
+          Room summaries: 24 hours. Daily totals: 90 days. Lifetime room count:
+          kept indefinitely. Player joins count places taken, including the
+          host; they aren’t unique people. Demo games and automated staging
+          checks are excluded. Tracking starts with this update.
+        </p>
+      </section>
+      <p id="message" role="status" aria-live="polite"></p>
+      <footer class="admin-footer">
+        <a href="/">← Back to the fun</a
+        ><span>No answers. No photos. No audio. Just the numbers.</span>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -6,12 +6,35 @@ import { fileURLToPath } from "node:url";
 import { networkInterfaces } from "node:os";
 import { FileStore } from "./store.mjs";
 import { api, SECURITY_HEADERS } from "./api.mjs";
+import { ObservedRoomStore } from "./usage.mjs";
+import { localUsage } from "./local-usage.mjs";
+import { adminApi } from "./admin.mjs";
 const root = fileURLToPath(new URL("../public/", import.meta.url));
-const store = await new FileStore(
+const rooms = await new FileStore(
   fileURLToPath(new URL("../.local/rooms.json", import.meta.url)),
 ).load();
+const usage = await localUsage(
+  fileURLToPath(new URL("../.local/usage.json", import.meta.url)),
+);
+const store = new ObservedRoomStore(rooms, (summary) => usage.ingest(summary));
+let adminConfig = {};
+{
+  try {
+    adminConfig = JSON.parse(
+      await readFile(
+        new URL("../.local/admin-auth.json", import.meta.url),
+        "utf8",
+      ),
+    );
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+}
 // Purge idle rooms too, without waiting for another player request.
-setInterval(() => store.cleanup().catch(() => {}), 60000).unref();
+setInterval(() => {
+  rooms.cleanup().catch(() => {});
+  usage.cleanup().catch(() => {});
+}, 60000).unref();
 const types = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -48,6 +71,46 @@ const server = http.createServer(async (req, res) => {
           return;
         }
       }
+      if (url.pathname.startsWith("/api/admin/")) {
+        if (body.length > 1024) {
+          res.writeHead(413, SECURITY_HEADERS);
+          res.end(JSON.stringify({ error: "Submission too large." }));
+          return;
+        }
+        const headers = new Headers();
+        for (const [key, value] of Object.entries(req.headers))
+          if (typeof value === "string") headers.set(key, value);
+        const result = await adminApi(
+          new Request(new URL(req.url, `http://${req.headers.host}`), {
+            method: req.method,
+            headers,
+            ...(!["GET", "HEAD"].includes(req.method) ? { body } : {}),
+          }),
+          {
+            secret: process.env.ADMIN_PASSWORD ?? adminConfig.ADMIN_PASSWORD,
+            username: process.env.ADMIN_USERNAME ?? adminConfig.ADMIN_USERNAME,
+            sessionSecret:
+              process.env.ADMIN_SESSION_SECRET ??
+              adminConfig.ADMIN_SESSION_SECRET,
+            ledger: usage,
+            budget: async () => {
+              try {
+                await rooms.budget(
+                  "admin-login:" + req.socket.remoteAddress,
+                  10,
+                  900,
+                );
+                return true;
+              } catch {
+                return false;
+              }
+            },
+          },
+        );
+        res.writeHead(result.status, Object.fromEntries(result.headers));
+        res.end(await result.text());
+        return;
+      }
       const result = await api(
         {
           path: url.pathname,
@@ -67,7 +130,12 @@ const server = http.createServer(async (req, res) => {
       res.end();
       return;
     }
-    const name = url.pathname === "/" ? "index.html" : url.pathname.slice(1),
+    const name =
+        url.pathname === "/"
+          ? "index.html"
+          : ["/admin", "/admin/"].includes(url.pathname)
+            ? "admin.html"
+            : url.pathname.slice(1),
       path = resolve(root, name);
     if (!path.startsWith(root)) {
       res.writeHead(403);

@@ -13,6 +13,7 @@
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["GameRoom", "RequestBudget"] },
+    { "tag": "v2", "new_sqlite_classes": ["UsageAnalytics"] },
   ],
   "env": {
     "staging": {
@@ -22,6 +23,7 @@
         "bindings": [
           { "name": "GAME_ROOMS", "class_name": "GameRoom" },
           { "name": "REQUEST_BUDGETS", "class_name": "RequestBudget" },
+          { "name": "USAGE_ANALYTICS", "class_name": "UsageAnalytics" },
         ],
       },
     },
@@ -32,6 +34,7 @@
         "bindings": [
           { "name": "GAME_ROOMS", "class_name": "GameRoom" },
           { "name": "REQUEST_BUDGETS", "class_name": "RequestBudget" },
+          { "name": "USAGE_ANALYTICS", "class_name": "UsageAnalytics" },
         ],
       },
     },

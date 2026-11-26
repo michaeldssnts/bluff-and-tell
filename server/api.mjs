@@ -1,6 +1,7 @@
 import { MAX_REQUEST_LENGTH } from "../public/audio-format.js";
 import { enableSimpleFlow } from "./engine.mjs";
 import { createHash } from "node:crypto";
+import { recordUsage, gameState } from "./usage.mjs";
 import {
   newRoom,
   validateAgeGroup,
@@ -20,7 +21,7 @@ export const SECURITY_HEADERS = {
   "Referrer-Policy": "no-referrer",
 };
 export async function api(
-  { path, method, body = "", token = "", ip = "unknown" },
+  { path, method, body = "", token = "", ip = "unknown", trackUsage = true },
   store,
 ) {
   try {
@@ -56,6 +57,8 @@ export async function api(
           data.recentPromptIds,
         );
         if (data.flowVersion === 2) enableSimpleFlow(room);
+        if (!trackUsage) room.usageExcluded = true;
+        recordUsage(room, "create");
         if (await store.create(room))
           return { status: 201, data: { token, room: snapshot(room, token) } };
       }
@@ -71,6 +74,7 @@ export async function api(
       return {
         status: 200,
         data: await store.mutate(code, (room) => {
+          const before = gameState(room);
           const token = joinRoom(
             room,
             data.name,
@@ -83,6 +87,7 @@ export async function api(
             data.recentPromptIds,
           );
           room.version++;
+          recordUsage(room, "join", before);
           return { token, room: snapshot(room, token) };
         }),
       };
@@ -102,12 +107,14 @@ export async function api(
         status: 200,
         data: await store.mutate(code, (room) => {
           const me = authorize(room, token);
+          const before = gameState(room);
           if (
             me.id === room.hostId &&
             Date.now() - (room.hostSeenAt ?? 0) > 20000
           )
             room.hostSeenAt = Date.now();
           tick(room);
+          recordUsage(room, "poll", before);
           return { room: snapshot(room, token) };
         }),
       };
@@ -125,7 +132,15 @@ export async function api(
               (r) => r.id === data.requestId && r.token === token,
             )
           ) {
+            const before = gameState(room);
             apply(room, token, data.action, data.data ?? {});
+            recordUsage(
+              room,
+              data.action === "answers" && !data.data?.submitted
+                ? "save-answer"
+                : data.action,
+              before,
+            );
             room.requests.push({ id: data.requestId, token });
             room.requests = room.requests.slice(-80);
           }

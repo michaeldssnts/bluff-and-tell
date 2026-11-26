@@ -1,4 +1,4 @@
-const CACHE = "bluff-and-tell-v35";
+const CACHE = "bluff-and-tell-v36";
 const ASSETS = [
   "/",
   "/index.html",
@@ -36,7 +36,8 @@ self.addEventListener("fetch", (e) => {
   if (
     e.request.method !== "GET" ||
     url.origin !== self.location.origin ||
-    url.pathname.startsWith("/api/")
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/admin")
   )
     return;
   e.respondWith(

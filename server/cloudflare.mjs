@@ -2,6 +2,8 @@ import { MAX_REQUEST_LENGTH } from "../public/audio-format.js";
 import { DurableObject } from "cloudflare:workers";
 import { createHash } from "node:crypto";
 import { api, SECURITY_HEADERS } from "./api.mjs";
+import { UsageLedger, ObservedRoomStore } from "./usage.mjs";
+import { adminApi } from "./admin.mjs";
 import {
   CloudflareRoomStore,
   consumeBudget,
@@ -14,7 +16,10 @@ const response = (data, status = 200) =>
 export class GameRoom extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
-    this.store = new CloudflareRoomStore(ctx.storage);
+    this.store = new ObservedRoomStore(
+      new CloudflareRoomStore(ctx.storage),
+      (usage) => env.USAGE_ANALYTICS.getByName("usage").ingest(usage),
+    );
   }
   async createRoom(room) {
     return this.store.create(room);
@@ -30,6 +35,22 @@ export class GameRoom extends DurableObject {
     } else {
       await this.ctx.storage.deleteAll();
     }
+  }
+}
+
+export class UsageAnalytics extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.ledger = new UsageLedger(ctx.storage);
+  }
+  async ingest(summary) {
+    await this.ledger.ingest(summary);
+  }
+  async report(now) {
+    return this.ledger.report(now);
+  }
+  async alarm() {
+    await this.ledger.cleanup();
   }
 }
 
@@ -71,6 +92,40 @@ export default {
     const { pathname: path } = new URL(request.url);
     if (!path.startsWith("/api/")) return env.ASSETS.fetch(request);
     const method = request.method;
+    if (path.startsWith("/api/admin/")) {
+      try {
+        const body = await readBody(request);
+        if (body === null || body.length > 1024)
+          return response({ error: "Submission too large." }, 413);
+        const fingerprint = createHash("sha256")
+          .update(
+            request.headers.get("CF-Connecting-IP") ?? "local-development",
+          )
+          .digest("hex");
+        const bounded = new Request(request.url, {
+          method,
+          headers: request.headers,
+          ...(!["GET", "HEAD"].includes(method) ? { body } : {}),
+        });
+        return await adminApi(bounded, {
+          secret: env.ADMIN_PASSWORD,
+          username: env.ADMIN_USERNAME,
+          sessionSecret: env.ADMIN_SESSION_SECRET,
+          ledger: env.USAGE_ANALYTICS.getByName("usage"),
+          budget: () =>
+            env.REQUEST_BUDGETS.getByName(fingerprint).consume(
+              "admin-login",
+              10,
+              900,
+            ),
+        });
+      } catch {
+        return response(
+          { error: "Usage is taking a breather. Try again shortly." },
+          503,
+        );
+      }
+    }
     if (path === "/api/health" && method === "GET")
       return response({ ok: true, environment: env.APP_ENV });
     if (path === "/api/config" && method === "GET")
@@ -98,6 +153,11 @@ export default {
         method,
         body,
         ip,
+        // CI exercises real game rules in staging; don't mistake it for players.
+        trackUsage: !(
+          env.APP_ENV === "staging" &&
+          request.headers.get("User-Agent") === "BluffAndTell-StagingCheck/1.0"
+        ),
         token: (request.headers.get("Authorization") ?? "").replace(
           /^Bearer /,
           "",
