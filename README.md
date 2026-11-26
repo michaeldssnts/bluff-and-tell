@@ -2,7 +2,7 @@
 
 **Know your friends. Believe nothing.**
 
-A party game for 2–8 players. Play tricky truths, silly photo challenges, doodle-offs and five-second radio adverts for ridiculous products.
+A party game for 2–8 players. Play tricky truths, silly photo challenges, doodle-offs and silly audio challenges.
 
 ## How to play
 

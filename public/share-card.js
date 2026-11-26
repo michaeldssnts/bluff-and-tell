@@ -32,7 +32,7 @@ export function drawShareCard(canvas, format, url) {
   text("BLUFF. SNAP. DOODLE. SING.", -405, -46, 27, "#211439");
   text("Zero talent. Big laughs.", -405, 31, 49, "#211439");
   text(
-    "Truths, photos, doodles & tiny radio adverts.",
+    "Truths, photos, doodles & silly audio challenges.",
     -405,
     81,
     29,
