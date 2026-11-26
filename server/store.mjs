@@ -15,6 +15,7 @@ export class FileStore {
       const data = JSON.parse(await readFile(this.path, "utf8"));
       for (const room of data)
         if (room.expiresAt > Date.now()) this.rooms.set(room.code, room);
+      if (data.length !== this.rooms.size) await this.persist();
     } catch (e) {
       if (e.code !== "ENOENT") throw e;
     }
@@ -48,7 +49,7 @@ export class FileStore {
     return this.locked(async () => {
       const source = this.rooms.get(code);
       if (!source || source.expiresAt <= Date.now()) {
-        this.rooms.delete(code);
+        if (this.rooms.delete(code)) await this.persist();
         throw new GameError(
           "Room not found or expired. Check the code with your host.",
           404,
@@ -62,6 +63,18 @@ export class FileStore {
         await this.persist();
       }
       return value;
+    });
+  }
+  async cleanup(now = Date.now()) {
+    return this.locked(async () => {
+      let removed = 0;
+      for (const [code, room] of this.rooms)
+        if (room.expiresAt <= now) {
+          this.rooms.delete(code);
+          removed++;
+        }
+      if (removed) await this.persist();
+      return removed;
     });
   }
   async budget(key, limit, seconds) {

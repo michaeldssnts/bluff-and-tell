@@ -3047,3 +3047,117 @@ textarea[aria-invalid="true"] {
   min-height: 44px;
   margin-top: 10px;
 }
+
+/* Scores lead the screen throughout play, with standings before celebration art. */
+.live-scoreboard {
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  padding: 12px 16px;
+  margin: 0 0 24px;
+  background: #211439f7;
+  border: 1px solid #a58bbd;
+  border-radius: 18px;
+  box-shadow: 0 7px 18px #160f244d;
+}
+.live-score-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+.live-score-heading > span {
+  font-size: 0.7rem;
+  color: #d6c9e6;
+}
+.live-scoreboard ol {
+  display: grid;
+  grid-template-columns: repeat(var(--score-columns, 4), minmax(0, 1fr));
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.live-scoreboard li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #382451;
+  padding: 8px;
+  border-radius: 10px;
+  min-width: 0;
+  border: 1px solid transparent;
+}
+.live-scoreboard .live-leader {
+  background: #d8fa85;
+  color: #211439;
+}
+.live-scoreboard .live-you:not(.live-leader) {
+  border-color: #ffadd1;
+}
+.live-rank {
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.live-player-name {
+  overflow-wrap: anywhere;
+  flex: 1;
+  font-size: 0.85rem;
+}
+.live-player-name small {
+  font-size: 0.65rem;
+}
+.live-scoreboard li > b {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.live-scoreboard li > b small {
+  font-size: 0.55rem;
+  margin-left: 3px;
+}
+.live-scoreboard ~ .mini-scoreboard {
+  display: none;
+}
+.score-reveal-hero {
+  padding: 10px 0 14px;
+}
+.score-reveal-hero .score-reaction {
+  font-size: 2.5rem;
+}
+.score-reveal-hero h2 {
+  font-size: clamp(1.7rem, 4vw, 2.6rem);
+  margin: 8px 0;
+}
+.score-reveal-hero .leader-callout {
+  margin: 6px 0;
+}
+.score-celebration > .personal-gain {
+  text-align: center;
+  margin: 22px 0 4px;
+}
+.score-celebration > .personal-gain strong {
+  font-size: clamp(3rem, 8vw, 4.5rem);
+}
+.victory-share {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin: 26px 0;
+}
+.certificate-hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.8rem;
+}
+@media (max-width: 700px) {
+  .live-scoreboard ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .live-scoreboard {
+    padding: 10px;
+    top: 4px;
+  }
+}

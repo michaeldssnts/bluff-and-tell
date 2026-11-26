@@ -1,3 +1,4 @@
+import { certificatePdf } from "/certificate.js";
 import {
   PHOTO_FILTERS,
   PhotoDraft,
@@ -78,6 +79,36 @@ const storage = {
     } catch {}
   },
 };
+// Room drafts follow the same expiry as the server; preferences and question
+// IDs contain no answers and can stay between games.
+function clearRoomDeviceData(code) {
+  const promptHistory = storage.get("bt-prompt-history");
+  if (promptHistory?.round?.startsWith(code + ":"))
+    storage.set("bt-prompt-history", { ids: promptHistory.ids ?? [] });
+  try {
+    for (const key of Object.keys(localStorage))
+      if (key.startsWith("bt-draft-" + code)) localStorage.removeItem(key);
+    for (const key of Object.keys(sessionStorage))
+      if (key.startsWith("bt-doodle-" + code + "-"))
+        sessionStorage.removeItem(key);
+    if (JSON.parse(sessionStorage.getItem("bt-photo-draft"))?.code === code)
+      sessionStorage.removeItem("bt-photo-draft");
+  } catch {}
+}
+function pruneDeviceRooms(now = Date.now()) {
+  const expiries = storage.get("bt-room-expiries") ?? {};
+  for (const [code, expiry] of Object.entries(expiries))
+    if (expiry <= now) {
+      clearRoomDeviceData(code);
+      if (storage.get("bt-session")?.code === code)
+        storage.remove("bt-session");
+      if (storage.get("bt-last-score-reveal")?.startsWith(code + ":"))
+        storage.remove("bt-last-score-reveal");
+      delete expiries[code];
+    }
+  storage.set("bt-room-expiries", expiries);
+}
+pruneDeviceRooms();
 let session = storage.get("bt-session"),
   room = null,
   busy = false,
@@ -400,7 +431,11 @@ function scoreCelebration(final = false) {
   const leaders = ranked.filter((p) => p.rank === 1);
   const topGain = Math.max(0, ...ranked.map((p) => p.gain));
   const personal = gains[room.me] ?? 0;
-  return `<section class="score-celebration" aria-label="${final ? "Final leaderboard" : "Round scores and leaderboard"}"><div class="score-reveal-top"><span class="eyebrow">${final ? "FINAL STANDINGS" : "ROUND " + room.question.number + " · THE SCORES ARE IN"}</span><button class="text-button" data-reveal-sound aria-pressed="${revealChime.enabled}" aria-label="Score chime">${revealChime.enabled ? "🔊 Sound on" : "🔇 Sound off"}</button></div><div class="score-reveal-hero"><span class="score-reaction" aria-hidden="true">${final ? "🏆" : personal > 0 ? "🎉" : "👀"}</span><h2>${final ? "Bragging rights secured." : topGain ? "Points. Drama. Glory." : "Plot twist. Zero points!"}</h2>${!final ? `<p class="personal-gain"><strong>+${personal}</strong><span>your points this round</span></p>` : ""}<p class="leader-callout">${esc(leaders.map((p) => p.name).join(" & "))}${leaders.length > 1 ? (final ? " share the win!" : " share the lead!") : final ? " wins!" : " is in the lead!"}</p></div><div class="leaderboard-labels"><strong>${final ? "The final pecking order" : "The pecking order"}</strong><span>Total points</span></div><ol class="reveal-leaderboard">${ranked.map((p, i) => `<li class="reveal-player ${p.rank === 1 ? "is-leader" : ""} ${p.id === room.me ? "is-you" : ""}" style="--reveal-order:${i}"><span class="reveal-rank" aria-label="Rank ${p.rank}">${p.rank <= 3 ? `<span aria-hidden="true">${["🥇", "🥈", "🥉"][p.rank - 1]}</span>` : ""}<b>#${p.rank}</b></span>${avatar(p)}<div class="reveal-player-name"><strong>${esc(p.name)}${p.id === room.me ? " <small>(you)</small>" : ""}</strong>${!final && p.climbed > 0 ? `<small class="rank-climb">↑ Up ${p.climbed} ${p.climbed === 1 ? "place" : "places"}</small>` : p.rank === 1 ? "<small>Top of the chaos</small>" : ""}</div><div class="reveal-player-points"><strong data-score-total="${p.score}" data-score-from="${p.score - p.gain}">${p.score}</strong>${!final ? `<span class="reveal-gain ${p.gain ? "has-gain" : ""}">+${p.gain} this round</span>` : "<span>points</span>"}</div></li>`).join("")}</ol></section>`;
+  return `<section class="score-celebration" aria-label="${final ? "Final leaderboard" : "Round scores and leaderboard"}"><div class="score-reveal-top"><span class="eyebrow">${final ? "FINAL STANDINGS" : "ROUND " + room.question.number + " · THE SCORES ARE IN"}</span><button class="text-button" data-reveal-sound aria-pressed="${revealChime.enabled}" aria-label="Score chime">${revealChime.enabled ? "🔊 Sound on" : "🔇 Sound off"}</button></div><div class="score-reveal-hero"><span class="score-reaction" aria-hidden="true">${final ? "🏆" : personal > 0 ? "🎉" : "👀"}</span><h2>${final ? "Bragging rights secured." : topGain ? "Points. Drama. Glory." : "Plot twist. Zero points!"}</h2><p class="leader-callout">${esc(leaders.map((p) => p.name).join(" & "))}${leaders.length > 1 ? (final ? " share the win!" : " share the lead!") : final ? " wins!" : " is in the lead!"}</p></div><div class="leaderboard-labels"><strong>${final ? "The final pecking order" : "The pecking order"}</strong><span>Total points</span></div><ol class="reveal-leaderboard">${ranked.map((p, i) => `<li class="reveal-player ${p.rank === 1 ? "is-leader" : ""} ${p.id === room.me ? "is-you" : ""}" style="--reveal-order:${i}"><span class="reveal-rank" aria-label="Rank ${p.rank}">${p.rank <= 3 ? `<span aria-hidden="true">${["🥇", "🥈", "🥉"][p.rank - 1]}</span>` : ""}<b>#${p.rank}</b></span>${avatar(p)}<div class="reveal-player-name"><strong>${esc(p.name)}${p.id === room.me ? " <small>(you)</small>" : ""}</strong>${!final && p.climbed > 0 ? `<small class="rank-climb">↑ Up ${p.climbed} ${p.climbed === 1 ? "place" : "places"}</small>` : p.rank === 1 ? "<small>Top of the chaos</small>" : ""}</div><div class="reveal-player-points"><strong data-score-total="${p.score}" data-score-from="${p.score - p.gain}">${p.score}</strong>${!final ? `<span class="reveal-gain ${p.gain ? "has-gain" : ""}">+${p.gain} this round</span>` : `<span>${p.score === 1 ? "point" : "points"}</span>`}</div></li>`).join("")}</ol>${!final ? `<p class="personal-gain"><strong>+${personal}</strong><span>your points this round</span></p>` : ""}</section>`;
+}
+function liveScoreboard() {
+  const rows = rankedScores(room.players);
+  return `<section class="live-scoreboard" style="--score-columns:${Math.min(4, rows.length)}" aria-label="Live leaderboard"><div class="live-score-heading"><strong>🏆 The scores</strong><span>Most points wins</span></div><ol>${rows.map((p) => `<li class="${p.rank === 1 ? "live-leader" : ""} ${p.id === room.me ? "live-you" : ""}"><span class="live-rank">#${p.rank}</span><strong class="live-player-name">${esc(p.name)}${p.id === room.me ? " <small>(you)</small>" : ""}</strong><b>${p.score}<small>pts</small></b></li>`).join("")}</ol></section>`;
 }
 function mountScoreReveal() {
   const final = room?.phase === "finished";
@@ -423,7 +458,8 @@ function mountScoreReveal() {
   storage.set("bt-last-score-reveal", key);
   revealChime.play(final);
   const panel = $(".score-celebration", app);
-  if (!panel || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (!panel || matchMedia("(prefers-reduced-motion: reduce)").matches)
+    return true;
   panel.classList.add("is-celebrating");
   celebrate();
   const totals = [...panel.querySelectorAll("[data-score-total]")];
@@ -440,6 +476,7 @@ function mountScoreReveal() {
     if (progress < 1) requestAnimationFrame(countUp);
   }
   requestAnimationFrame(countUp);
+  return true;
 }
 function rankOf(p) {
   return room.players.filter((x) => x.score > p.score).length + 1;
@@ -1159,6 +1196,20 @@ function questionScreen() {
       "",
     )}</div>${room.demo ? '<div class="center"><button class="text-button" data-exit-demo>Exit solo demo</button></div>' : ""}</main>${footer()}`;
 }
+function downloadCertificate() {
+  if (room?.phase !== "finished") return;
+  const url = URL.createObjectURL(
+    certificatePdf({ players: room.players, rounds: room.history.length }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "bluff-and-tell-certificate.pdf";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  toast("Certificate ready. Brag responsibly.");
+}
 function historyFace(q, r) {
   const tally = r?.tally ?? {},
     top = Math.max(0, ...Object.values(tally)),
@@ -1175,7 +1226,7 @@ function finished() {
     bluffers = players.filter((p) => p.fooled === bluffMax),
     correctMax = Math.max(...players.map((p) => p.correct)),
     detectives = players.filter((p) => p.correct === correctMax);
-  return `${header()}<main id="main" class="finished pulse">${demoNote()}<div class="trophy" aria-hidden="true">${icon("trophy", 65)}</div><span class="eyebrow">THE POINTS ARE IN.</span><h1>${winners.length > 1 ? "A suspicious tie." : esc(winners[0].name) + " takes it."}</h1><p>${winners.length > 1 ? esc(winners.map((p) => p.name).join(" & ")) + " share the win." : "Good instincts. Excellent company. A few questionable life choices."}</p><div class="victory-share"><button class="button primary" type="button" id="share-victory">${icon("sparkles", 18)} ${winners.some((p) => p.id === room.me) ? "Share your victory" : "Share your result"}</button></div>${scoreCelebration(true)}<div class="end-actions"><button class="button primary" data-action="replay">${icon("shuffle", 18)} Play again</button><button class="button secondary" data-leave>${icon("logout", 18)} ${room.demo ? "Exit demo" : "Exit room"}</button><p class="muted">Play again takes everyone back to the lobby with fresh questions.</p></div><div class="awards"><div class="award"><small>${icon("eye", 16)} MASTER BLUFFER</small><strong>${bluffMax ? esc(bluffers.map((p) => p.name).join(" & ")) : "Nobody got away with it"}</strong><p>${bluffMax ? bluffMax + (bluffMax === 1 ? " guess fooled." : " guesses fooled.") + " Very convincing." : "The group saw through every lie."}</p></div><div class="award"><small>${icon("sparkles", 16)} HUMAN LIE DETECTOR</small><strong>${correctMax ? esc(detectives.map((p) => p.name).join(" & ")) : "Next time, trust your gut"}</strong><p>${correctMax ? correctMax + (correctMax === 1 ? " truth spotted." : " truths spotted.") + " Impressive instincts." : "Those were some convincing decoys."}</p></div></div><details class="panel history"><summary>Relive the revelations</summary>${room.history.map(({ question: q, result: r }) => (["face", "doodle", "audio"].includes(q.type) ? historyFace(q, r) : `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · ${esc(q.title)}</p><strong>${esc(q.options.find((o) => o.id === r?.truthId)?.text)}</strong><small>The lie: ${esc(q.options.find((o) => o.id === r?.lieId)?.text)} · Fooled ${r?.bluffPoints ?? 0}</small></div>`)).join("")}</details></main>${footer()}`;
+  return `${header()}<main id="main" class="finished pulse">${scoreCelebration(true)}${demoNote()}<div class="trophy" aria-hidden="true">${icon("trophy", 65)}</div><span class="eyebrow">THE POINTS ARE IN.</span><h1>${winners.length > 1 ? "A suspicious tie." : esc(winners[0].name) + " takes it."}</h1><p>${winners.length > 1 ? esc(winners.map((p) => p.name).join(" & ")) + " share the win." : "Good instincts. Excellent company. A few questionable life choices."}</p><div class="victory-share"><button class="button primary" type="button" id="share-victory">${icon("sparkles", 18)} ${winners.some((p) => p.id === room.me) ? "Share your victory" : "Share your result"}</button><button class="button secondary" type="button" id="download-certificate">${icon("trophy", 18)} Download certificate (PDF)</button><p class="muted certificate-hint">Keep the scores. Keep the bragging rights. Download before the room expires.</p></div><div class="end-actions"><button class="button primary" data-action="replay">${icon("shuffle", 18)} Play again</button><button class="button secondary" data-leave>${icon("logout", 18)} ${room.demo ? "Exit demo" : "Exit room"}</button><p class="muted">Play again takes everyone back to the lobby with fresh questions.</p></div><div class="awards"><div class="award"><small>${icon("eye", 16)} MASTER BLUFFER</small><strong>${bluffMax ? esc(bluffers.map((p) => p.name).join(" & ")) : "Nobody got away with it"}</strong><p>${bluffMax ? bluffMax + (bluffMax === 1 ? " guess fooled." : " guesses fooled.") + " Very convincing." : "The group saw through every lie."}</p></div><div class="award"><small>${icon("sparkles", 16)} HUMAN LIE DETECTOR</small><strong>${correctMax ? esc(detectives.map((p) => p.name).join(" & ")) : "Next time, trust your gut"}</strong><p>${correctMax ? correctMax + (correctMax === 1 ? " truth spotted." : " truths spotted.") + " Impressive instincts." : "Those were some convincing decoys."}</p></div></div><details class="panel history"><summary>Relive the revelations</summary>${room.history.map(({ question: q, result: r }) => (["face", "doodle", "audio"].includes(q.type) ? historyFace(q, r) : `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · ${esc(q.title)}</p><strong>${esc(q.options.find((o) => o.id === r?.truthId)?.text)}</strong><small>The lie: ${esc(q.options.find((o) => o.id === r?.lieId)?.text)} · Fooled ${r?.bluffPoints ?? 0}</small></div>`)).join("")}</details></main>${footer()}`;
 }
 function questionProgress() {
   const q = room?.question;
@@ -1258,12 +1309,14 @@ function render(force = false) {
       field.setSelectionRange(focused.start, focused.end);
     }
   }
-  mountScoreReveal();
+  const freshScoreReveal = mountScoreReveal();
+  if (room && !["lobby", "finished"].includes(room.phase) && !room.result)
+    $("main", app).insertAdjacentHTML("afterbegin", liveScoreboard());
   updateTimer();
   mountPad();
-  if (room && old && old !== room.phase) {
+  if (room && ((old && old !== room.phase) || freshScoreReveal)) {
     window.scrollTo({ top: 0, behavior: "instant" });
-    const title = $("h1", app);
+    const title = $(".score-celebration h2", app) || $("h1", app);
     if (title) {
       title.tabIndex = -1;
       title.focus({ preventScroll: true });
@@ -1272,6 +1325,13 @@ function render(force = false) {
 }
 function updateTimer() {
   if (!room) return;
+  if (room.expiresAt <= Date.now() + offset) {
+    clearRoomDeviceData(room.code);
+    pruneDeviceRooms(Date.now() + offset);
+    reset();
+    toast("This room’s 24 hours are up. Time for fresh chaos.");
+    return;
+  }
   const time =
       room.pausedRemaining ??
       Math.max(
@@ -1352,7 +1412,28 @@ function accept(data) {
     )
       jingle.cancel();
     const oldPhotoContext = photoContext();
+    if (
+      room?.flowVersion === 2 &&
+      room.question?.id !== data.room.question?.id
+    ) {
+      storage.remove(draftKey());
+      storage.remove(slotsKey());
+      if (oldPhotoContext)
+        try {
+          sessionStorage.removeItem(
+            `bt-doodle-${oldPhotoContext.code}-${oldPhotoContext.playerId}-${oldPhotoContext.questionId}`,
+          );
+        } catch {}
+    }
     room = data.room;
+    if (session.expiresAt !== room.expiresAt) {
+      session.expiresAt = room.expiresAt;
+      storage.set("bt-session", session);
+      storage.set("bt-room-expiries", {
+        ...(storage.get("bt-room-expiries") ?? {}),
+        [room.code]: room.expiresAt,
+      });
+    }
     if (!samePhotoContext(oldPhotoContext)) {
       photoCache = { questionId: null, photos: {} };
       photoKey = "";
@@ -1467,6 +1548,7 @@ function reset() {
   clearTimeout(saveTimer);
   saveTimer = null;
   if (session) {
+    clearRoomDeviceData(session.code);
     storage.remove(draftKey());
     storage.remove(slotsKey());
   }
@@ -2010,7 +2092,13 @@ document.addEventListener("click", async (e) => {
       playerId: t.dataset.faceVote,
       questionId: room.question.id,
     }).catch(() => {});
-  else if (t.id === "share-victory") shareVictory().catch(() => {});
+  else if (t.id === "download-certificate") {
+    try {
+      downloadCertificate();
+    } catch {
+      toast("Couldn’t create your certificate. Tap Download to try again.");
+    }
+  } else if (t.id === "share-victory") shareVictory().catch(() => {});
   else if (t.matches("[data-reroll]"))
     send("reroll", { promptId: t.dataset.reroll }).catch(() => {});
   else if (t.matches("[data-option]"))

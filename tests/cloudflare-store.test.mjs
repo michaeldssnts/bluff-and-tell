@@ -86,11 +86,14 @@ test("Cloudflare room storage rolls back failed mutations and isolates room code
     store.mutate("ZZZZZZ", () => {}),
     { status: 404 },
   );
+  storage.data.get("room").shots = { private: "expired-photo" };
+  storage.data.get("room").clips = { private: "expired-audio" };
   storage.data.get("room").expiresAt = Date.now() - 1;
   await assert.rejects(
     store.mutate(room.code, () => {}),
     { status: 404 },
   );
+  assert.equal(storage.data.has("room"), false);
 });
 
 test("concurrent duplicate Cloudflare actions apply once", async () => {

@@ -10,6 +10,8 @@ const root = fileURLToPath(new URL("../public/", import.meta.url));
 const store = await new FileStore(
   fileURLToPath(new URL("../.local/rooms.json", import.meta.url)),
 ).load();
+// Purge idle rooms too, without waiting for another player request.
+setInterval(() => store.cleanup().catch(() => {}), 60000).unref();
 const types = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",

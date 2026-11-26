@@ -15,18 +15,26 @@ export class CloudflareRoomStore {
     });
   }
   async mutate(code, fn) {
-    return this.storage.transaction(async (tx) => {
+    // Return the expiry outcome from the transaction before throwing, so deletion
+    // commits even if the scheduled alarm has not run yet.
+    const outcome = await this.storage.transaction(async (tx) => {
       const room = await tx.get("room");
-      if (!room || room.code !== code || room.expiresAt <= Date.now())
-        throw new GameError(
-          "Room not found or expired. Check the code with your host.",
-          404,
-        );
+      if (!room || room.code !== code) return { missing: true };
+      if (room.expiresAt <= Date.now()) {
+        await tx.delete("room");
+        return { missing: true };
+      }
       const before = JSON.stringify(room);
-      const result = await fn(room);
+      const value = await fn(room);
       if (before !== JSON.stringify(room)) await tx.put("room", room);
-      return result;
+      return { value };
     });
+    if (outcome.missing)
+      throw new GameError(
+        "Room not found or expired. Check the code with your host.",
+        404,
+      );
+    return outcome.value;
   }
   // The Worker applies account-wide, per-client limits before room dispatch.
   async budget() {}
