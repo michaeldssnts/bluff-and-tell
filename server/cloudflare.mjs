@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { api, SECURITY_HEADERS } from "./api.mjs";
 import { UsageLedger, ObservedRoomStore } from "./usage.mjs";
 import { adminApi } from "./admin.mjs";
+import { PackUpdates, packUpdatesApi } from "./pack-updates.mjs";
 import {
   CloudflareRoomStore,
   consumeBudget,
@@ -42,12 +43,22 @@ export class UsageAnalytics extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.ledger = new UsageLedger(ctx.storage);
+    this.updates = new PackUpdates(ctx.storage);
   }
   async ingest(summary) {
     await this.ledger.ingest(summary);
   }
   async report(now) {
     return this.ledger.report(now);
+  }
+  async subscribe(email) {
+    await this.updates.subscribe(email);
+  }
+  async unsubscribe(email) {
+    await this.updates.unsubscribe(email);
+  }
+  async registrations() {
+    return this.updates.list();
   }
   async alarm() {
     await this.ledger.cleanup();
@@ -92,6 +103,39 @@ export default {
     const { pathname: path } = new URL(request.url);
     if (!path.startsWith("/api/")) return env.ASSETS.fetch(request);
     const method = request.method;
+    if (["/api/pack-updates", "/api/pack-updates/unsubscribe"].includes(path)) {
+      try {
+        const body = await readBody(request);
+        if (body === null || body.length > 1024)
+          return response({ error: "Submission too large." }, 413);
+        const fingerprint = createHash("sha256")
+          .update(
+            request.headers.get("CF-Connecting-IP") ?? "local-development",
+          )
+          .digest("hex");
+        return await packUpdatesApi(
+          new Request(request.url, {
+            method,
+            headers: request.headers,
+            ...(!["GET", "HEAD"].includes(method) ? { body } : {}),
+          }),
+          {
+            list: env.USAGE_ANALYTICS.getByName("usage"),
+            budget: () =>
+              env.REQUEST_BUDGETS.getByName(fingerprint).consume(
+                "pack-updates",
+                5,
+                900,
+              ),
+          },
+        );
+      } catch {
+        return response(
+          { error: "Couldn’t save that. Try again shortly." },
+          503,
+        );
+      }
+    }
     if (path.startsWith("/api/admin/")) {
       try {
         const body = await readBody(request);

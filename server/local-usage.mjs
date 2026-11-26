@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { dirname } from "node:path";
 import { UsageLedger } from "./usage.mjs";
 
-export async function localUsage(path) {
+export async function fileStorage(path) {
   let data = new Map();
   try {
     data = new Map(JSON.parse(await readFile(path, "utf8")));
@@ -36,7 +36,11 @@ export async function localUsage(path) {
       return work;
     },
   };
-  const ledger = new UsageLedger(storage);
+  return storage;
+}
+
+export async function localUsage(path) {
+  const ledger = new UsageLedger(await fileStorage(path));
   await ledger.cleanup();
   return ledger;
 }

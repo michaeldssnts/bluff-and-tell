@@ -3,10 +3,19 @@ import {
   MAX_AUDIO_DATA_LENGTH,
 } from "../public/audio-format.js";
 import { fairRoundPlan } from "./round-plan.mjs";
-import { GAME_LENGTHS, GAME_TYPES } from "../public/game-options.js";
+import {
+  GAME_LENGTHS,
+  GAME_TYPES,
+  QUESTION_PACKS,
+} from "../public/game-options.js";
+import {
+  CHRISTMAS_DOODLES,
+  CHRISTMAS_PHOTOS,
+  CHRISTMAS_AUDIO,
+} from "./christmas-prompts.mjs";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import {
-  PROMPTS,
+  ALL_PROMPTS as PROMPTS,
   promptPoolForPlayer,
   AGE_GROUPS,
   promptsForPlayer,
@@ -264,18 +273,27 @@ function buildQuestion(p, answer) {
 const modeOf = (room) => room.settings.mode ?? "classic";
 const hasChild = (room) => room.players.some((p) => p.ageGroup === "child");
 // A face-off round: one player pulls a face, everyone else copies it, the room votes on the best copy.
-function faceQuestion(p) {
+function faceQuestion(p, used = new Set(), christmas = false) {
+  let title = `Copy ${p.name}’s face`;
+  if (christmas) {
+    const template =
+      shuffle(CHRISTMAS_PHOTOS.filter((t) => !used.has(t)))[0] ??
+      shuffle(CHRISTMAS_PHOTOS)[0];
+    used.add(template);
+    title = template.replace("{name}", p.name);
+  }
   return {
     id: id(),
     type: "face",
     playerId: p.id,
-    title: `Copy ${p.name}’s face`,
+    title,
   };
 }
 // A doodle round: everyone draws the same prompt about one player; the room votes for the funniest.
-function doodleQuestion(p, used = new Set()) {
-  const fresh = DOODLE_PROMPTS.filter((t) => !used.has(t)),
-    template = shuffle(fresh.length ? fresh : DOODLE_PROMPTS)[0];
+function doodleQuestion(p, used = new Set(), christmas = false) {
+  const bank = christmas ? CHRISTMAS_DOODLES : DOODLE_PROMPTS;
+  const fresh = bank.filter((t) => !used.has(t)),
+    template = shuffle(fresh.length ? fresh : bank)[0];
   used.add(template);
   return {
     id: id(),
@@ -298,7 +316,14 @@ const JINGLE_PRODUCTS = [
   "a spa for stressed potatoes",
   "a doorbell for a tent",
 ];
-function audioQuestion(player, used) {
+function audioQuestion(player, used, christmas = false) {
+  if (christmas) {
+    const title =
+      shuffle(CHRISTMAS_AUDIO.filter((t) => !used.has(t)))[0] ??
+      shuffle(CHRISTMAS_AUDIO)[0];
+    used.add(title);
+    return { id: id(), type: "audio", playerId: player.id, title };
+  }
   const product =
     shuffle(JINGLE_PRODUCTS.filter((p) => !used.has(p)))[0] ??
     shuffle(JINGLE_PRODUCTS)[0];
@@ -315,6 +340,7 @@ export function enableSimpleFlow(room) {
   room.flowVersion = 2;
   room.settings.mode = room.demo ? "classic" : "mixed";
   room.settings.totalRounds = 10;
+  room.settings.questionPack = "original";
   room.players.forEach((p) => {
     p.ageGroup = null;
   });
@@ -322,6 +348,7 @@ export function enableSimpleFlow(room) {
 function startSimpleGame(room, now) {
   const used = new Set(),
     mode = modeOf(room);
+  const christmas = room.settings.questionPack === "christmas";
   const count = room.settings.totalRounds ?? 10;
   const ids = room.players.map((p) => p.id);
   room.fairOrder = (room.fairOrder ?? (room.demo ? ids : shuffle(ids))).filter(
@@ -342,9 +369,9 @@ function startSimpleGame(room, now) {
   let truthIndex = 0;
   room.queue = plan.rounds.map(({ type, playerId }) => {
     const player = room.players.find((p) => p.id === playerId);
-    if (type === "face") return faceQuestion(player);
-    if (type === "doodle") return doodleQuestion(player, used);
-    if (type === "audio") return audioQuestion(player, used);
+    if (type === "face") return faceQuestion(player, used, christmas);
+    if (type === "doodle") return doodleQuestion(player, used, christmas);
+    if (type === "audio") return audioQuestion(player, used, christmas);
     const prompt = pool[truthIndex++ % pool.length];
     return {
       id: id(),
@@ -602,6 +629,19 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
         "Settings are locked after the game starts.",
       );
       for (const [name, value] of Object.entries(data)) {
+        if (name === "questionPack") {
+          fail(
+            room.flowVersion === 2 &&
+              QUESTION_PACKS.some((pack) => pack.id === value),
+            "Pick The Original or Christmas Chaos.",
+          );
+          room.settings.questionPack = value;
+          room.players.forEach((p) => {
+            p.answers = [];
+            p.submitted = false;
+          });
+          continue;
+        }
         if (name === "mode") {
           fail(
             (room.flowVersion === 2

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { EXTRA_PROMPTS } from "./extra-prompts.mjs";
+import { CHRISTMAS_PROMPTS } from "./christmas-prompts.mjs";
 
 export const PROMPTS = [
   {
@@ -254,12 +255,14 @@ export function promptPackForRoom(room) {
 }
 export function normalisePromptHistory(value) {
   if (!Array.isArray(value)) return [];
-  const valid = new Set(PROMPTS.map((p) => p.id));
+  const valid = new Set(ALL_PROMPTS.map((p) => p.id));
   return value
     .filter((id, index) => valid.has(id) && value.lastIndexOf(id) === index)
     .slice(-90);
 }
 export function promptPoolForPlayer(player, room) {
+  if (room?.flowVersion === 2 && room.settings.questionPack === "christmas")
+    return CHRISTMAS_PROMPTS;
   // New games share one question bank. Employment history is not required.
   if (room?.flowVersion === 2)
     return PROMPTS.filter((p) => p.id !== "first-job");
@@ -278,7 +281,7 @@ export function promptsForPlayer(player, room) {
   if (room?.flowVersion === 2 && room.phase !== "lobby") {
     const q = room.queue[room.questionIndex];
     return room.phase === "writing" && q?.playerId === player.id
-      ? [PROMPTS.find((p) => p.id === q.promptId)].filter(Boolean)
+      ? [ALL_PROMPTS.find((p) => p.id === q.promptId)].filter(Boolean)
       : [];
   }
   if (player.ageGroup === null) return [];
@@ -309,3 +312,4 @@ export function promptsForPlayer(player, room) {
 }
 
 PROMPTS.push(...EXTRA_PROMPTS);
+export const ALL_PROMPTS = [...PROMPTS, ...CHRISTMAS_PROMPTS];

@@ -7,8 +7,9 @@ import { networkInterfaces } from "node:os";
 import { FileStore } from "./store.mjs";
 import { api, SECURITY_HEADERS } from "./api.mjs";
 import { ObservedRoomStore } from "./usage.mjs";
-import { localUsage } from "./local-usage.mjs";
+import { localUsage, fileStorage } from "./local-usage.mjs";
 import { adminApi } from "./admin.mjs";
+import { PackUpdates, packUpdatesApi } from "./pack-updates.mjs";
 const root = fileURLToPath(new URL("../public/", import.meta.url));
 const rooms = await new FileStore(
   fileURLToPath(new URL("../.local/rooms.json", import.meta.url)),
@@ -17,6 +18,11 @@ const usage = await localUsage(
   fileURLToPath(new URL("../.local/usage.json", import.meta.url)),
 );
 const store = new ObservedRoomStore(rooms, (summary) => usage.ingest(summary));
+const updates = new PackUpdates(
+  await fileStorage(
+    fileURLToPath(new URL("../.local/pack-updates.json", import.meta.url)),
+  ),
+);
 let adminConfig = {};
 {
   try {
@@ -71,7 +77,12 @@ const server = http.createServer(async (req, res) => {
           return;
         }
       }
-      if (url.pathname.startsWith("/api/admin/")) {
+      if (
+        url.pathname.startsWith("/api/admin/") ||
+        ["/api/pack-updates", "/api/pack-updates/unsubscribe"].includes(
+          url.pathname,
+        )
+      ) {
         if (body.length > 1024) {
           res.writeHead(413, SECURITY_HEADERS);
           res.end(JSON.stringify({ error: "Submission too large." }));
@@ -80,7 +91,10 @@ const server = http.createServer(async (req, res) => {
         const headers = new Headers();
         for (const [key, value] of Object.entries(req.headers))
           if (typeof value === "string") headers.set(key, value);
-        const result = await adminApi(
+        const endpoint = url.pathname.startsWith("/api/admin/")
+          ? adminApi
+          : packUpdatesApi;
+        const result = await endpoint(
           new Request(new URL(req.url, `http://${req.headers.host}`), {
             method: req.method,
             headers,
@@ -92,12 +106,17 @@ const server = http.createServer(async (req, res) => {
             sessionSecret:
               process.env.ADMIN_SESSION_SECRET ??
               adminConfig.ADMIN_SESSION_SECRET,
-            ledger: usage,
+            ledger: {
+              report: (now) => usage.report(now),
+              registrations: () => updates.list(),
+            },
+            list: updates,
             budget: async () => {
               try {
                 await rooms.budget(
-                  "admin-login:" + req.socket.remoteAddress,
-                  10,
+                  (endpoint === adminApi ? "admin-login:" : "pack-updates:") +
+                    req.socket.remoteAddress,
+                  endpoint === adminApi ? 10 : 5,
                   900,
                 );
                 return true;
@@ -133,8 +152,12 @@ const server = http.createServer(async (req, res) => {
     const name =
         url.pathname === "/"
           ? "index.html"
-          : ["/admin", "/admin/"].includes(url.pathname)
-            ? "admin.html"
+          : ["/admin", "/admin/", "/updates", "/updates/"].includes(
+                url.pathname,
+              )
+            ? url.pathname.startsWith("/admin")
+              ? "admin.html"
+              : "updates.html"
             : url.pathname.slice(1),
       path = resolve(root, name);
     if (!path.startsWith(root)) {

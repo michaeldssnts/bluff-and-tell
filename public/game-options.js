@@ -12,6 +12,21 @@ export const GAME_TYPES = [
   },
 ];
 export const GAME_LENGTHS = [5, 10, 20, 30];
+export const QUESTION_PACKS = [
+  {
+    id: "original",
+    label: "The Original",
+    description: "Everyday secrets. Extraordinary nonsense.",
+    badge: "Always free",
+  },
+  {
+    id: "christmas",
+    label: "Christmas Chaos",
+    description:
+      "100 quirky Christmas questions. Plus festive photos, doodles and Santa laughs.",
+    badge: "Free this festive season",
+  },
+];
 export function estimateMinutes(questions, players = 4) {
   return Math.round(questions * players * 0.7);
 }

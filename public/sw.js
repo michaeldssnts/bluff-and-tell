@@ -1,4 +1,4 @@
-const CACHE = "bluff-and-tell-v36";
+const CACHE = "bluff-and-tell-v37";
 const ASSETS = [
   "/",
   "/index.html",
@@ -12,6 +12,8 @@ const ASSETS = [
   "/invite-qr.js",
   "/vendor/qrcode.js",
   "/game-options.js",
+  "/pack-updates.js",
+  "/updates",
   "/share-card.js",
   "/icon.svg",
   "/manifest.webmanifest",

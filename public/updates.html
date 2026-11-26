@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Pack emails · Bluff &amp; Tell</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/pack-updates.js"></script>
+  </head>
+  <body>
+    <main class="updates-page">
+      <a class="text-button" href="/">← Back to the fun</a>
+      <section class="panel">
+        <span class="eyebrow">YOUR INBOX. YOUR RULES.</span>
+        <h1>Less mail?<br />No hard feelings.</h1>
+        <p>
+          Enter your email to stop expansion pack updates. You can keep playing
+          without signing up.
+        </p>
+        <form id="unsubscribe-form">
+          <label for="email">Email address</label
+          ><input
+            id="email"
+            name="email"
+            type="email"
+            autocomplete="email"
+            maxlength="254"
+            required
+          /><button type="submit" class="button primary full">
+            Unsubscribe
+          </button>
+          <p role="status" aria-live="polite"></p>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

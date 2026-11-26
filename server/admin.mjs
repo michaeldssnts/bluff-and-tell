@@ -53,7 +53,13 @@ export async function adminApi(
     sessionSecret.length < 32
   )
     return reply({ error: "Admin access hasn’t been configured yet." }, 503);
-  if (!["/api/admin/session", "/api/admin/usage"].includes(url.pathname))
+  if (
+    ![
+      "/api/admin/session",
+      "/api/admin/usage",
+      "/api/admin/registrations",
+    ].includes(url.pathname)
+  )
     return reply({ error: "Not found." }, 404);
   if (request.method === "POST" || request.method === "DELETE") {
     if (request.headers.get("Origin") !== url.origin)
@@ -90,5 +96,7 @@ export async function adminApi(
   if (request.method !== "GET")
     return reply({ error: "Method not allowed." }, 405);
   if (url.pathname === "/api/admin/session") return reply({ ok: true });
+  if (url.pathname === "/api/admin/registrations")
+    return reply(await ledger.registrations());
   return reply(await ledger.report(now));
 }

@@ -48,7 +48,14 @@ function showLogin() {
   $("#login").hidden = false;
   $("#dashboard").hidden = true;
   report = null;
-  for (const id of ["stats", "trend", "activity", "duration", "rooms"])
+  for (const id of [
+    "stats",
+    "trend",
+    "activity",
+    "duration",
+    "rooms",
+    "registrations",
+  ])
     $("#" + id).replaceChildren();
 }
 async function request(path, options) {
@@ -193,6 +200,22 @@ $("#sign-out").addEventListener("click", async () => {
   }
 });
 $("#refresh").addEventListener("click", () => refresh());
+$("#load-registrations").addEventListener("click", async () => {
+  const button = $("#load-registrations");
+  button.disabled = true;
+  try {
+    const data = await request("registrations");
+    $("#registrations").innerHTML =
+      `<p><strong>${n(data.total)}</strong> registered for pack updates${data.total > 100 ? " · latest 100 shown" : ""}.</p>` +
+      (data.subscribers.length
+        ? `<div class="table-wrap"><table><thead><tr><th>Email</th><th>Signed up</th><th>Status</th></tr></thead><tbody>${data.subscribers.map((row) => `<tr><td>${escape(row.email)}</td><td>${escape(new Date(row.createdAt).toLocaleDateString())}</td><td>Awaiting email confirmation</td></tr>`).join("")}</tbody></table></div>`
+        : "<p class='admin-muted'>Your first early bird is still on the way.</p>");
+  } catch (error) {
+    $("#message").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
 $("#period").addEventListener("change", render);
 $("#room-filter").addEventListener("change", renderRooms);
 setInterval(() => {
