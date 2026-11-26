@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   GAME_LENGTHS,
+  GAME_TYPES,
   estimateMinutes,
   progressState,
 } from "../public/game-options.js";
@@ -80,4 +81,14 @@ test("old lobbies adopt the new buckets without changing active games", () => {
   room.settings.totalRounds = 6;
   tick(room, now);
   assert.equal(room.settings.totalRounds, 6);
+});
+
+test("the game menu offers exactly Truth & Lies and Party Mix", () => {
+  assert.deepEqual(
+    GAME_TYPES.map((type) => [type.id, type.label]),
+    [
+      ["classic", "Truth & Lies"],
+      ["mixed", "Party Mix"],
+    ],
+  );
 });

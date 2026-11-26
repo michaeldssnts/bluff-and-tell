@@ -1,3 +1,16 @@
+export const GAME_TYPES = [
+  {
+    id: "classic",
+    label: "Truth & Lies",
+    description: "Text only. One truth. Three lies.",
+  },
+  {
+    id: "mixed",
+    label: "Party Mix",
+    description:
+      "Text, photos, audio and drawings. Bring your ridiculous side.",
+  },
+];
 export const GAME_LENGTHS = [5, 10, 20, 30];
 export function estimateMinutes(questions, players = 4) {
   return Math.round(questions * players * 0.7);

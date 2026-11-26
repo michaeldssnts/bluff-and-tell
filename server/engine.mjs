@@ -3,7 +3,7 @@ import {
   MAX_AUDIO_DATA_LENGTH,
 } from "../public/audio-format.js";
 import { fairRoundPlan } from "./round-plan.mjs";
-import { GAME_LENGTHS } from "../public/game-options.js";
+import { GAME_LENGTHS, GAME_TYPES } from "../public/game-options.js";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import {
   PROMPTS,
@@ -531,6 +531,13 @@ function nextQuestion(room, now) {
   else openQuestion(room, now);
 }
 export function tick(room, now = Date.now()) {
+  // Existing standalone photo/doodle games may finish, but their lobbies now offer the two public modes.
+  if (
+    room.flowVersion === 2 &&
+    room.phase === "lobby" &&
+    !GAME_TYPES.some((type) => type.id === room.settings.mode)
+  )
+    room.settings.mode = room.demo ? "classic" : "mixed";
   // Update old lobbies; never change the length of a game already underway.
   if (
     room.flowVersion === 2 &&
@@ -596,7 +603,13 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       );
       for (const [name, value] of Object.entries(data)) {
         if (name === "mode") {
-          fail(MODES.includes(value), "Choose a game type.");
+          fail(
+            (room.flowVersion === 2
+              ? GAME_TYPES.map((type) => type.id)
+              : MODES
+            ).includes(value),
+            "Choose a game type: Truth & Lies or Party Mix.",
+          );
           fail(
             value === "classic" || !room.demo,
             "The demo players can’t take photos or draw. Try these rounds with friends.",
@@ -998,6 +1011,11 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       room.promptSeed = id();
       if (room.demo) configureDemo(room);
       room.needsAnswers = false;
+      if (
+        room.flowVersion === 2 &&
+        !GAME_TYPES.some((type) => type.id === room.settings.mode)
+      )
+        room.settings.mode = room.demo ? "classic" : "mixed";
       enter(room, "lobby", now);
       break;
     default:

@@ -106,15 +106,18 @@ test("new prompt pool is broad, shared without age, and excludes work prompts", 
   assert(pool.every((p) => p.id !== "first-job"));
   assert.deepEqual(pool, promptPoolForPlayer(room.players[1], room));
 });
-test("round count is validated and each single activity mode honours it", () => {
-  for (const [mode, type] of [
-    ["faces", "face"],
-    ["doodles", "doodle"],
-    ["classic", "truth"],
-  ]) {
+test("round count is validated for the two public game modes", () => {
+  for (const mode of ["classic", "mixed"]) {
     const { room } = setup(mode, 20);
     assert.equal(room.queue.length, 20);
-    assert(room.queue.every((q) => q.type === type));
+    if (mode === "classic") assert(room.queue.every((q) => q.type === "truth"));
+    else
+      assert.deepEqual([...new Set(room.queue.map((q) => q.type))].sort(), [
+        "audio",
+        "doodle",
+        "face",
+        "truth",
+      ]);
   }
   const { room, token } = newRoom("Mia", false, now, null);
   enableSimpleFlow(room);
@@ -230,4 +233,28 @@ test("a two-player party mix completes photos, drawings and truths without skipp
   assert.equal(room.phase, "lobby");
   assert.equal(room.flowVersion, 2);
   assert(room.players.every((p) => p.answers.length === 0));
+});
+
+test("new rooms only accept the two public modes and old standalone lobbies switch to Party Mix", () => {
+  const { room, token } = newRoom("Mia", false, now, null);
+  enableSimpleFlow(room);
+  for (const mode of ["faces", "doodles", "video", "silly"])
+    assert.throws(
+      () => apply(room, token, "settings", { mode }, now),
+      /Truth & Lies or Party Mix/,
+    );
+  for (const mode of ["faces", "doodles"]) {
+    room.settings.mode = mode;
+    tick(room, now);
+    assert.equal(room.settings.mode, "mixed");
+  }
+  const game = setup("mixed", 10);
+  game.room.settings.mode = "faces";
+  const queue = JSON.stringify(game.room.queue);
+  tick(game.room, now);
+  assert.equal(game.room.settings.mode, "faces");
+  assert.equal(JSON.stringify(game.room.queue), queue);
+  game.room.phase = "finished";
+  apply(game.room, game.tokens[0], "replay", {}, now);
+  assert.equal(game.room.settings.mode, "mixed");
 });
