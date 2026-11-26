@@ -307,7 +307,7 @@ function audioQuestion(player, used) {
     id: id(),
     type: "audio",
     playerId: player.id,
-    title: `Make a jingle for ${product}.`,
+    title: `Make a radio advert for ${product}.`,
   };
 }
 const isPhotoRound = (q) => ["face", "doodle"].includes(q?.type);
