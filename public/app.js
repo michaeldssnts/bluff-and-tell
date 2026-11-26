@@ -1,3 +1,4 @@
+import { rankedScores, RevealChime } from "/reveal-effects.js";
 import { JingleRecorder } from "/jingle-recorder.js";
 import { createInviteQr, roomInviteUrl, sessionForInvite } from "/invite-qr.js";
 import {
@@ -381,6 +382,58 @@ function roundPoints(playerId) {
       ? result.bluffPoints + (result.stumpBonus ?? 0)
       : 0)
   );
+}
+const revealChime = new RevealChime();
+revealChime.enabled = storage.get("bt-reveal-sound") !== false;
+let lastScoreReveal = storage.get("bt-last-score-reveal");
+function scoreCelebration(final = false) {
+  const gains = Object.fromEntries(
+    room.players.map((p) => [p.id, final ? 0 : roundPoints(p.id)]),
+  );
+  const ranked = rankedScores(room.players, gains);
+  const leaders = ranked.filter((p) => p.rank === 1);
+  const topGain = Math.max(0, ...ranked.map((p) => p.gain));
+  const personal = gains[room.me] ?? 0;
+  return `<section class="score-celebration" aria-label="${final ? "Final leaderboard" : "Round scores and leaderboard"}"><div class="score-reveal-top"><span class="eyebrow">${final ? "FINAL STANDINGS" : "ROUND " + room.question.number + " · THE SCORES ARE IN"}</span><button class="text-button" data-reveal-sound aria-pressed="${revealChime.enabled}" aria-label="Score chime">${revealChime.enabled ? "🔊 Sound on" : "🔇 Sound off"}</button></div><div class="score-reveal-hero"><span class="score-reaction" aria-hidden="true">${final ? "🏆" : personal > 0 ? "🎉" : "👀"}</span><h2>${final ? "Bragging rights secured." : topGain ? "Points. Drama. Glory." : "Plot twist. Zero points!"}</h2>${!final ? `<p class="personal-gain"><strong>+${personal}</strong><span>your points this round</span></p>` : ""}<p class="leader-callout">${esc(leaders.map((p) => p.name).join(" & "))}${leaders.length > 1 ? (final ? " share the win!" : " share the lead!") : final ? " wins!" : " is in the lead!"}</p></div><div class="leaderboard-labels"><strong>${final ? "The final pecking order" : "The pecking order"}</strong><span>Total points</span></div><ol class="reveal-leaderboard">${ranked.map((p, i) => `<li class="reveal-player ${p.rank === 1 ? "is-leader" : ""} ${p.id === room.me ? "is-you" : ""}" style="--reveal-order:${i}"><span class="reveal-rank" aria-label="Rank ${p.rank}">${p.rank <= 3 ? `<span aria-hidden="true">${["🥇", "🥈", "🥉"][p.rank - 1]}</span>` : ""}<b>#${p.rank}</b></span>${avatar(p)}<div class="reveal-player-name"><strong>${esc(p.name)}${p.id === room.me ? " <small>(you)</small>" : ""}</strong>${!final && p.climbed > 0 ? `<small class="rank-climb">↑ Up ${p.climbed} ${p.climbed === 1 ? "place" : "places"}</small>` : p.rank === 1 ? "<small>Top of the chaos</small>" : ""}</div><div class="reveal-player-points"><strong data-score-total="${p.score}" data-score-from="${p.score - p.gain}">${p.score}</strong>${!final ? `<span class="reveal-gain ${p.gain ? "has-gain" : ""}">+${p.gain} this round</span>` : "<span>points</span>"}</div></li>`).join("")}</ol></section>`;
+}
+function mountScoreReveal() {
+  const final = room?.phase === "finished";
+  if (
+    !room ||
+    (!final && !(["reveal", "story"].includes(room.phase) && room.result))
+  )
+    return;
+  const key =
+    room.code +
+    ":" +
+    (final
+      ? "final:" + room.history.map((r) => r.question.id).join(",")
+      : room.question.id);
+  if (!final)
+    $("main", app).insertAdjacentHTML("afterbegin", scoreCelebration());
+  const fresh = key !== lastScoreReveal;
+  if (!fresh) return;
+  lastScoreReveal = key;
+  storage.set("bt-last-score-reveal", key);
+  revealChime.play(final);
+  const panel = $(".score-celebration", app);
+  if (!panel || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  panel.classList.add("is-celebrating");
+  celebrate();
+  const totals = [...panel.querySelectorAll("[data-score-total]")];
+  const started = performance.now();
+  function countUp(now) {
+    if (!panel.isConnected) return;
+    const progress = Math.min(1, (now - started) / 850);
+    const eased = 1 - (1 - progress) ** 3;
+    for (const el of totals) {
+      const from = Number(el.dataset.scoreFrom),
+        to = Number(el.dataset.scoreTotal);
+      el.textContent = Math.round(from + (to - from) * eased);
+    }
+    if (progress < 1) requestAnimationFrame(countUp);
+  }
+  requestAnimationFrame(countUp);
 }
 function rankOf(p) {
   return room.players.filter((x) => x.score > p.score).length + 1;
@@ -1052,7 +1105,7 @@ function finished() {
     bluffers = players.filter((p) => p.fooled === bluffMax),
     correctMax = Math.max(...players.map((p) => p.correct)),
     detectives = players.filter((p) => p.correct === correctMax);
-  return `${header()}<main id="main" class="finished pulse">${demoNote()}<div class="trophy" aria-hidden="true">${icon("trophy", 65)}</div><span class="eyebrow">THE POINTS ARE IN.</span><h1>${winners.length > 1 ? "A suspicious tie." : esc(winners[0].name) + " takes it."}</h1><p>${winners.length > 1 ? esc(winners.map((p) => p.name).join(" & ")) + " share the win." : "Good instincts. Excellent company. A few questionable life choices."}</p><div class="victory-share"><button class="button primary" type="button" id="share-victory">${icon("sparkles", 18)} ${winners.some((p) => p.id === room.me) ? "Share your victory" : "Share your result"}</button></div><section class="panel"><div class="panel-title"><h2>The final word</h2><span class="pill lime">${room.history.length} questions</span></div>${players.map((p, i) => `<div class="player-row"><span class="rank">${players.findIndex((x) => x.score === p.score) + 1}</span>${avatar(p)}<div class="player-name">${esc(p.name)}${p.id === room.me ? " <small>You</small>" : ""}</div><span class="points">${p.score}<small>pts</small></span></div>`).join("")}</section><div class="end-actions"><button class="button primary" data-action="replay">${icon("shuffle", 18)} Play again</button><button class="button secondary" data-leave>${icon("logout", 18)} ${room.demo ? "Exit demo" : "Exit room"}</button><p class="muted">Play again takes everyone back to the lobby with fresh questions.</p></div><div class="awards"><div class="award"><small>${icon("eye", 16)} MASTER BLUFFER</small><strong>${bluffMax ? esc(bluffers.map((p) => p.name).join(" & ")) : "Nobody got away with it"}</strong><p>${bluffMax ? bluffMax + (bluffMax === 1 ? " guess fooled." : " guesses fooled.") + " Very convincing." : "The group saw through every lie."}</p></div><div class="award"><small>${icon("sparkles", 16)} HUMAN LIE DETECTOR</small><strong>${correctMax ? esc(detectives.map((p) => p.name).join(" & ")) : "Next time, trust your gut"}</strong><p>${correctMax ? correctMax + (correctMax === 1 ? " truth spotted." : " truths spotted.") + " Impressive instincts." : "Those were some convincing decoys."}</p></div></div><details class="panel history"><summary>Relive the revelations</summary>${room.history.map(({ question: q, result: r }) => (["face", "doodle", "audio"].includes(q.type) ? historyFace(q, r) : `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · ${esc(q.title)}</p><strong>${esc(q.options.find((o) => o.id === r?.truthId)?.text)}</strong><small>The lie: ${esc(q.options.find((o) => o.id === r?.lieId)?.text)} · Fooled ${r?.bluffPoints ?? 0}</small></div>`)).join("")}</details></main>${footer()}`;
+  return `${header()}<main id="main" class="finished pulse">${demoNote()}<div class="trophy" aria-hidden="true">${icon("trophy", 65)}</div><span class="eyebrow">THE POINTS ARE IN.</span><h1>${winners.length > 1 ? "A suspicious tie." : esc(winners[0].name) + " takes it."}</h1><p>${winners.length > 1 ? esc(winners.map((p) => p.name).join(" & ")) + " share the win." : "Good instincts. Excellent company. A few questionable life choices."}</p><div class="victory-share"><button class="button primary" type="button" id="share-victory">${icon("sparkles", 18)} ${winners.some((p) => p.id === room.me) ? "Share your victory" : "Share your result"}</button></div>${scoreCelebration(true)}<div class="end-actions"><button class="button primary" data-action="replay">${icon("shuffle", 18)} Play again</button><button class="button secondary" data-leave>${icon("logout", 18)} ${room.demo ? "Exit demo" : "Exit room"}</button><p class="muted">Play again takes everyone back to the lobby with fresh questions.</p></div><div class="awards"><div class="award"><small>${icon("eye", 16)} MASTER BLUFFER</small><strong>${bluffMax ? esc(bluffers.map((p) => p.name).join(" & ")) : "Nobody got away with it"}</strong><p>${bluffMax ? bluffMax + (bluffMax === 1 ? " guess fooled." : " guesses fooled.") + " Very convincing." : "The group saw through every lie."}</p></div><div class="award"><small>${icon("sparkles", 16)} HUMAN LIE DETECTOR</small><strong>${correctMax ? esc(detectives.map((p) => p.name).join(" & ")) : "Next time, trust your gut"}</strong><p>${correctMax ? correctMax + (correctMax === 1 ? " truth spotted." : " truths spotted.") + " Impressive instincts." : "Those were some convincing decoys."}</p></div></div><details class="panel history"><summary>Relive the revelations</summary>${room.history.map(({ question: q, result: r }) => (["face", "doodle", "audio"].includes(q.type) ? historyFace(q, r) : `<div class="history-item"><p>${esc(person(q.playerId)?.name)} · ${esc(q.title)}</p><strong>${esc(q.options.find((o) => o.id === r?.truthId)?.text)}</strong><small>The lie: ${esc(q.options.find((o) => o.id === r?.lieId)?.text)} · Fooled ${r?.bluffPoints ?? 0}</small></div>`)).join("")}</details></main>${footer()}`;
 }
 function questionProgress() {
   const q = room?.question;
@@ -1135,15 +1188,9 @@ function render(force = false) {
       field.setSelectionRange(focused.start, focused.end);
     }
   }
+  mountScoreReveal();
   updateTimer();
   mountPad();
-  if (
-    room?.phase === "finished" &&
-    old &&
-    old !== "finished" &&
-    old !== "lobby"
-  )
-    celebrate();
   if (room && old && old !== room.phase) {
     window.scrollTo({ top: 0, behavior: "instant" });
     const title = $("h1", app);
@@ -1928,6 +1975,20 @@ setInterval(updateTimer, 250);
 setInterval(() => {
   if (!document.hidden) poll();
 }, 2000);
+document.addEventListener("click", (event) => {
+  const toggle = event.target.closest?.("[data-reveal-sound]");
+  if (toggle) {
+    revealChime.setEnabled(!revealChime.enabled);
+    storage.set("bt-reveal-sound", revealChime.enabled);
+    toggle.setAttribute("aria-pressed", String(revealChime.enabled));
+    toggle.textContent = revealChime.enabled ? "🔊 Sound on" : "🔇 Sound off";
+  }
+  revealChime.unlock();
+  if (toggle && revealChime.enabled) setTimeout(() => revealChime.play(), 50);
+});
+document.addEventListener("keydown", () => revealChime.unlock(), {
+  once: true,
+});
 $("#help-scoring").innerHTML = scoringGuide();
 if (session) {
   app.className = "shell";

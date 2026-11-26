@@ -2773,3 +2773,227 @@ textarea[aria-invalid="true"] {
     grid-template-columns: 1fr;
   }
 }
+
+/* The score reveal is the headline moment, with the full room always ranked. */
+.score-celebration {
+  width: 100%;
+  max-width: 850px;
+  margin: 0 auto 32px;
+  padding: clamp(18px, 4vw, 36px);
+  background: linear-gradient(145deg, #42295f, #2c1c43);
+  border: 2px solid #c5a2ff;
+  border-radius: 28px;
+  box-shadow:
+    0 14px 0 #160f24,
+    0 0 65px #c5a2ff1a;
+  text-align: left;
+}
+.score-reveal-top,
+.leaderboard-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.score-reveal-top .eyebrow {
+  margin: 0;
+}
+.score-reveal-top .text-button {
+  flex-shrink: 0;
+  min-height: 44px;
+}
+.score-reveal-hero {
+  text-align: center;
+  padding: 16px 0 22px;
+}
+.score-reaction {
+  display: inline-block;
+  font-size: clamp(3rem, 8vw, 5rem);
+  line-height: 1.2;
+}
+.score-reveal-hero h2 {
+  font-size: clamp(1.9rem, 5vw, 3.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  margin: 12px 0;
+}
+.personal-gain {
+  display: grid;
+  gap: 0;
+  margin: 12px 0;
+}
+.personal-gain strong {
+  font-size: clamp(4.5rem, 13vw, 7.5rem);
+  line-height: 1;
+  color: #d8fa85;
+  letter-spacing: -0.07em;
+}
+.personal-gain span {
+  font-size: 0.85rem;
+  color: #d6c9e6;
+}
+.leader-callout {
+  color: #ffadd1;
+  font-size: 1.05rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.leaderboard-labels {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+}
+.leaderboard-labels > span {
+  color: #d6c9e6;
+  font-size: 0.75rem;
+}
+.reveal-leaderboard {
+  list-style: none;
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+}
+.reveal-player {
+  display: grid;
+  grid-template-columns: 45px 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #745a8e;
+  border-radius: 17px;
+  background: #211439;
+}
+.reveal-player.is-leader {
+  background: #d8fa85;
+  color: #211439;
+  border-color: #d8fa85;
+}
+.reveal-player.is-you:not(.is-leader) {
+  border-color: #ffadd1;
+}
+.reveal-rank {
+  display: grid;
+  justify-items: center;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+.reveal-rank > span {
+  font-size: 1.4rem;
+}
+.reveal-player .avatar {
+  width: 40px;
+  height: 40px;
+  font-size: 0.85rem;
+}
+.reveal-player-name {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.reveal-player-name > strong {
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+.reveal-player-name small {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.reveal-player-name .rank-climb {
+  color: #d8fa85;
+  font-weight: 800;
+}
+.reveal-player.is-leader .rank-climb {
+  color: #35204a;
+}
+.reveal-player-points {
+  text-align: right;
+  display: grid;
+  gap: 3px;
+}
+.reveal-player-points > strong {
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.reveal-gain,
+.reveal-player-points > span {
+  font-size: 0.7rem;
+}
+.reveal-gain.has-gain {
+  color: #d8fa85;
+  font-weight: 800;
+}
+.is-leader .reveal-gain.has-gain {
+  color: #35204a;
+}
+.score-celebration ~ .mini-scoreboard {
+  display: none;
+}
+.is-celebrating .score-reaction {
+  animation: score-bounce 700ms ease both;
+}
+.is-celebrating .personal-gain strong {
+  animation: score-pop 650ms cubic-bezier(0.2, 1.5, 0.5, 1) both;
+}
+.is-celebrating .reveal-player {
+  animation: score-arrive 500ms ease both;
+  animation-delay: calc(var(--reveal-order) * 85ms);
+}
+@keyframes score-bounce {
+  0% {
+    transform: scale(0.4) rotate(-15deg);
+  }
+  60% {
+    transform: scale(1.18) rotate(10deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes score-pop {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes score-arrive {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@media (max-width: 520px) {
+  .score-celebration {
+    padding: 16px;
+    border-radius: 22px;
+  }
+  .score-reveal-top {
+    align-items: flex-start;
+  }
+  .score-reveal-top .eyebrow {
+    max-width: 170px;
+    line-height: 1.5;
+  }
+  .reveal-player {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    gap: 9px;
+    padding: 12px 10px;
+  }
+  .reveal-player .avatar {
+    display: none;
+  }
+  .reveal-player-name > strong {
+    font-size: 1rem;
+  }
+  .reveal-player-points > strong {
+    font-size: 2.3rem;
+  }
+}
