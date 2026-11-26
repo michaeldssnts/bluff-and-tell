@@ -4,6 +4,7 @@ import {
   PhotoDraft,
   filterPixels,
   boundedJpeg,
+  preparePhoto,
 } from "../public/photo-tools.js";
 const context = { code: "ABC234", playerId: "a", questionId: "round1" };
 const image = "data:image/jpeg;base64,AAAA";
@@ -101,4 +102,43 @@ test("unencodable photos fail explicitly instead of returning oversized data", (
       boundedJpeg({ width: 96, toDataURL: () => image + "A".repeat(60000) }),
     /too large/,
   );
+});
+
+test("image decoding falls back when bitmap decoding fails and releases its temporary URL", async () => {
+  const originals = {
+    bitmap: globalThis.createImageBitmap,
+    Image: globalThis.Image,
+    document: globalThis.document,
+    create: URL.createObjectURL,
+    revoke: URL.revokeObjectURL,
+  };
+  const released = [];
+  globalThis.createImageBitmap = async () => {
+    throw Error("Bitmap decode unavailable");
+  };
+  URL.createObjectURL = () => "blob:synthetic-photo";
+  URL.revokeObjectURL = (url) => released.push(url);
+  globalThis.Image = class {
+    width = 640;
+    height = 480;
+    set src(value) {
+      queueMicrotask(() => this.onload());
+    }
+  };
+  globalThis.document = {
+    createElement: () => ({
+      getContext: () => ({ fillRect() {}, drawImage() {} }),
+      toDataURL: () => image,
+    }),
+  };
+  try {
+    assert.equal(await preparePhoto({}), image);
+    assert.deepEqual(released, ["blob:synthetic-photo"]);
+  } finally {
+    globalThis.createImageBitmap = originals.bitmap;
+    globalThis.Image = originals.Image;
+    globalThis.document = originals.document;
+    URL.createObjectURL = originals.create;
+    URL.revokeObjectURL = originals.revoke;
+  }
 });
