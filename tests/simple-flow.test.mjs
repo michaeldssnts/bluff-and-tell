@@ -1,3 +1,4 @@
+import { encodeJingleWav } from "../public/audio-format.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -18,19 +19,19 @@ function setup(mode = "mixed", count = 10) {
   apply(room, token, "start", {}, now);
   return { room, tokens: [token, guest] };
 }
-test("new flow needs no age profile and mixes all activities in balanced trios", () => {
+test("new flow needs no age profile and keeps Party Mix mostly text with fair text turns", () => {
   for (let i = 0; i < 12; i++) {
     const { room } = setup("mixed", 30);
     assert.equal(room.queue.length, 30);
-    for (let j = 0; j < 30; j += 3)
-      assert.deepEqual(
-        new Set(room.queue.slice(j, j + 3).map((q) => q.type)),
-        new Set(["truth", "face", "doodle"]),
-      );
-    assert(
-      room.queue.every((q, i) => i === 0 || q.type !== room.queue[i - 1].type),
+    assert.equal(room.queue.filter((q) => q.type === "truth").length, 21);
+    assert.equal(room.queue.filter((q) => q.type === "face").length, 3);
+    assert.equal(room.queue.filter((q) => q.type === "doodle").length, 3);
+    const totals = room.players.map(
+      (p) =>
+        room.queue.filter((q) => q.type === "truth" && q.playerId === p.id)
+          .length,
     );
-    assert(room.queue.every((q, i) => q.playerId === room.players[i % 2].id));
+    assert(Math.abs(totals[0] - totals[1]) <= 1);
     assert(!room.queue.some((q) => q.promptId === "first-job"));
     assert(room.players.every((p) => p.ageGroup === null));
   }
@@ -40,9 +41,9 @@ test("one truth question is authored, voted, revealed and acknowledged before th
   for (let index = 0; index < 5; index++) {
     assert.equal(room.phase, "writing");
     assert.equal(room.questionIndex, index);
-    const author = index % 2,
-      voter = 1 - author,
-      q = room.queue[index];
+    const q = room.queue[index],
+      author = room.players.findIndex((p) => p.id === q.playerId),
+      voter = 1 - author;
     const view = snapshot(room, tokens[author], now);
     assert.equal(view.prompts.length, 1);
     assert.equal(view.question.number, index + 1);
@@ -193,13 +194,21 @@ test("a two-player party mix completes photos, drawings and truths without skipp
           { questionId: q.id, image },
           clock,
         );
+      } else if (q.type === "audio") {
+        const clip =
+          "data:audio/wav;base64," +
+          Buffer.from(
+            encodeJingleWav([new Float32Array(12000)], 12000),
+          ).toString("base64");
+        for (const token of tokens)
+          apply(room, token, "audio", { questionId: q.id, clip }, clock);
       } else
         for (const token of tokens)
           apply(room, token, "photo", { questionId: q.id, image }, clock);
       assert.equal(room.phase, "judging");
       for (let i = 0; i < 2; i++) {
         const other = 1 - i;
-        if (q.type === "doodle" || other !== author)
+        if (["doodle", "audio"].includes(q.type) || other !== author)
           apply(
             room,
             tokens[i],

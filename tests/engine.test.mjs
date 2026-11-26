@@ -970,7 +970,7 @@ test("a face-off round: pose, copy, judge, reveal, then photos are cleared", () 
   // You can't vote for yourself or for the face being copied.
   assert.throws(
     () => apply(g.room, copiers[0], "face-vote", { questionId: q.id, playerId: firstId }, at),
-    /own photo/,
+    /own entry/,
   );
   assert.throws(
     () => apply(g.room, copiers[0], "face-vote", { questionId: q.id, playerId: q.playerId }, at),
@@ -1087,7 +1087,7 @@ test("a doodle round: everyone draws, entries stay private, the room votes for t
   // The featured player's drawing can win too; your own can't get your vote.
   assert.throws(
     () => apply(g.room, g.tokens[1], "face-vote", { questionId: q.id, playerId: ids[1] }, at),
-    /own photo/,
+    /own entry/,
   );
   apply(g.room, g.tokens[0], "face-vote", { questionId: q.id, playerId: q.playerId === ids[0] ? ids[1] : q.playerId }, at);
   apply(g.room, g.tokens[1], "face-vote", { questionId: q.id, playerId: ids[2] }, at);

@@ -406,3 +406,54 @@ test("new web flow creates and joins without age, starts mixed rounds and surviv
     started.data.room.question.id,
   );
 });
+
+test("five-second audio uploads use the bounded audio route and never leak into room polling", async (t) => {
+  const { encodeJingleWav } = await import("../public/audio-format.js");
+  const { apply } = await import("../server/engine.mjs");
+  const { call, store } = await setup(t);
+  const created = await call("/api/rooms", "POST", {
+    name: "Audio Host",
+    flowVersion: 2,
+  });
+  const { room, token } = created.data,
+    base = "/api/rooms/" + room.code;
+  const guest = (await call(base + "/join", "POST", { name: "Audio Guest" }))
+    .data;
+  await store.mutate(room.code, (state) => {
+    apply(state, token, "start");
+    state.questionIndex = state.queue.findIndex((q) => q.type === "audio") - 1;
+    state.phase = "reveal";
+    apply(state, token, "next");
+  });
+  const current = (await call(base, "GET", null, token)).data.room;
+  const clip =
+    "data:audio/wav;base64," +
+    Buffer.from(encodeJingleWav([new Float32Array(60000)], 12000)).toString(
+      "base64",
+    );
+  assert(clip.length > 64000);
+  const uploaded = await call(
+    base + "/action",
+    "POST",
+    {
+      action: "audio",
+      requestId: randomUUID(),
+      data: { questionId: current.question.id, clip },
+    },
+    token,
+  );
+  assert.equal(uploaded.status, 200);
+  assert(!JSON.stringify(uploaded.data).includes("data:audio"));
+  assert.equal((await call(base + "/audio")).status, 401);
+  assert.equal(
+    Object.keys(
+      (await call(base + "/audio", "GET", null, guest.token)).data.clips,
+    ).length,
+    0,
+  );
+  assert.equal(
+    Object.keys((await call(base + "/audio", "GET", null, token)).data.clips)
+      .length,
+    1,
+  );
+});

@@ -2597,3 +2597,116 @@ textarea[aria-invalid="true"] {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+.simple-round {
+  max-width: 760px;
+  margin: 28px auto 44px;
+}
+.round-question {
+  font-size: clamp(1.7rem, 5vw, 2.6rem);
+  line-height: 1.15;
+  margin: 22px 0 28px;
+}
+.answer-panel {
+  padding: 24px;
+}
+.simple-round .answer-fields label {
+  font-size: 1rem;
+  font-weight: 800;
+}
+.simple-round textarea {
+  min-height: 112px;
+  font-size: 1.1rem;
+}
+.round-primary,
+.question-stage .photo-button,
+.next-panel > .button.primary {
+  min-height: 64px;
+  font-size: 1.12rem;
+  font-weight: 800;
+}
+.simple-round .save-strip {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 18px;
+}
+.simple-round .save-status {
+  text-align: center;
+  font-size: 0.75rem;
+}
+.game-extras {
+  margin: 20px 0 0;
+  font-size: 0.85rem;
+}
+.game-extras > summary {
+  cursor: pointer;
+  padding: 12px 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+.game-extras .host-controls {
+  margin-top: 8px;
+}
+.question-stage .option {
+  min-height: 72px;
+  font-size: 1.1rem;
+}
+.question-stage .status-banner strong {
+  font-size: 1.15rem;
+}
+@media (max-width: 680px) {
+  .simple-round {
+    margin-top: 22px;
+  }
+  .answer-panel {
+    padding: 18px;
+  }
+  .simple-round .save-strip {
+    bottom: 10px;
+  }
+}
+
+.audio-round audio {
+  display: block;
+  width: 100%;
+  margin: 14px 0;
+}
+.jingle-hint {
+  color: var(--muted);
+  font-size: 1rem;
+  margin-bottom: 24px;
+}
+.jingle-preview {
+  padding: 16px;
+  background: var(--panel);
+  border-radius: 16px;
+  margin-bottom: 18px;
+}
+.jingle-entry {
+  padding: 20px;
+  border: 2px solid var(--line);
+  background: var(--panel);
+  border-radius: 18px;
+}
+.jingle-entry.chosen {
+  border-color: var(--lime);
+}
+.jingle-entries {
+  display: grid;
+  gap: 18px;
+}
+.audio-round .round-primary {
+  min-height: 72px;
+  font-size: 1.2rem;
+}
+.audio-round .is-recording {
+  background: #ffadd1;
+}
+.jingle-skip {
+  display: flex;
+  margin: 16px auto;
+}
+.audio-round > .text-button {
+  margin: 12px 0;
+}

@@ -1,3 +1,4 @@
+import { MAX_REQUEST_LENGTH } from "../public/audio-format.js";
 import http from "node:http";
 import { readFile } from "node:fs/promises";
 import { resolve, extname } from "node:path";
@@ -39,7 +40,7 @@ const server = http.createServer(async (req, res) => {
       let body = "";
       for await (const chunk of req) {
         body += chunk;
-        if (body.length > 64000) {
+        if (body.length > MAX_REQUEST_LENGTH) {
           res.writeHead(413, SECURITY_HEADERS);
           res.end(JSON.stringify({ error: "Submission too large." }));
           return;
@@ -78,7 +79,7 @@ const server = http.createServer(async (req, res) => {
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
       "Content-Security-Policy":
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
     });
     res.end(req.method === "HEAD" ? undefined : content);
   } catch (e) {

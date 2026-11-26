@@ -1,3 +1,8 @@
+import {
+  jingleDuration,
+  MAX_AUDIO_DATA_LENGTH,
+} from "../public/audio-format.js";
+import { fairRoundPlan } from "./round-plan.mjs";
 import { GAME_LENGTHS } from "../public/game-options.js";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import {
@@ -279,6 +284,32 @@ function doodleQuestion(p, used = new Set()) {
     title: template.replace("{name}", p.name),
   };
 }
+const JINGLE_PRODUCTS = [
+  "waterproof toast",
+  "a pillow that snores back",
+  "a self-applauding toaster",
+  "sunscreen for snowmen",
+  "an alarm clock for lazy ghosts",
+  "a banana with a built-in umbrella",
+  "a crown for your fridge",
+  "invisible socks",
+  "a trampoline for snails",
+  "a remote control for clouds",
+  "a spa for stressed potatoes",
+  "a doorbell for a tent",
+];
+function audioQuestion(player, used) {
+  const product =
+    shuffle(JINGLE_PRODUCTS.filter((p) => !used.has(p)))[0] ??
+    shuffle(JINGLE_PRODUCTS)[0];
+  used.add(product);
+  return {
+    id: id(),
+    type: "audio",
+    playerId: player.id,
+    title: `Make a jingle for ${product}.`,
+  };
+}
 const isPhotoRound = (q) => ["face", "doodle"].includes(q?.type);
 export function enableSimpleFlow(room) {
   room.flowVersion = 2;
@@ -292,29 +323,28 @@ function startSimpleGame(room, now) {
   const used = new Set(),
     mode = modeOf(room);
   const count = room.settings.totalRounds ?? 10;
-  // Shuffle each trio so all three activities appear before a type repeats.
-  const types = [];
-  while (types.length < count) {
-    const trio = shuffle(["truth", "face", "doodle"]);
-    if (trio[0] === types.at(-1)) trio.push(trio.shift());
-    types.push(...trio);
-  }
+  const ids = room.players.map((p) => p.id);
+  room.fairOrder = (room.fairOrder ?? (room.demo ? ids : shuffle(ids))).filter(
+    (id) => ids.includes(id),
+  );
+  room.fairOrder.push(
+    ...shuffle(ids.filter((id) => !room.fairOrder.includes(id))),
+  );
+  const plan = fairRoundPlan(room.fairOrder, count, mode, {
+    offset: room.fairOffset ?? 0,
+    variant: room.mixGameNumber ?? 0,
+  });
+  room.fairOffset = plan.nextOffset;
+  room.mixGameNumber = (room.mixGameNumber ?? 0) + 1;
   const pool = shuffle(promptPoolForPlayer(room.players[0], room));
   const recent = new Set(room.players.flatMap((p) => p.promptHistory ?? []));
   pool.sort((a, b) => Number(recent.has(a.id)) - Number(recent.has(b.id)));
   let truthIndex = 0;
-  room.queue = Array.from({ length: count }, (_, i) => {
-    const player = room.players[i % room.players.length];
-    const type =
-      mode === "mixed"
-        ? types[i]
-        : mode === "faces"
-          ? "face"
-          : mode === "doodles"
-            ? "doodle"
-            : "truth";
+  room.queue = plan.rounds.map(({ type, playerId }) => {
+    const player = room.players.find((p) => p.id === playerId);
     if (type === "face") return faceQuestion(player);
     if (type === "doodle") return doodleQuestion(player, used);
+    if (type === "audio") return audioQuestion(player, used);
     const prompt = pool[truthIndex++ % pool.length];
     return {
       id: id(),
@@ -372,6 +402,8 @@ function startQuestions(room, now) {
 function openQuestion(room, now) {
   room.votes = {};
   room.shots = {};
+  room.clips = {};
+  room.audioSkipped = [];
   const q = room.queue[room.questionIndex];
   if (room.flowVersion === 2 && q?.type === "truth") {
     room.players.forEach((p) => {
@@ -399,7 +431,13 @@ function openQuestion(room, now) {
   }
   enter(
     room,
-    q?.type === "face" ? "posing" : q?.type === "doodle" ? "drawing" : "voting",
+    q?.type === "face"
+      ? "posing"
+      : q?.type === "doodle"
+        ? "drawing"
+        : q?.type === "audio"
+          ? "recording"
+          : "voting",
     now,
   );
 }
@@ -410,9 +448,9 @@ function copiersFor(room) {
 // The entries people vote on: copies in a face-off (not the original), every drawing in a doodle round.
 function entriesFor(room) {
   const q = room.queue[room.questionIndex];
-  return Object.keys(room.shots).filter(
-    (id) => q.type === "doodle" || id !== q.playerId,
-  );
+  return Object.keys(
+    q.type === "audio" ? (room.clips ?? {}) : room.shots,
+  ).filter((id) => ["doodle", "audio"].includes(q.type) || id !== q.playerId);
 }
 // Anyone with at least one entry that isn't their own can judge.
 function judgesFor(room) {
@@ -487,6 +525,8 @@ function nextQuestion(room, now) {
   room.votes = {};
   // Photos are only kept for the round they belong to.
   room.shots = {};
+  room.clips = {};
+  room.audioSkipped = [];
   if (room.questionIndex >= room.queue.length) enter(room, "finished", now);
   else openQuestion(room, now);
 }
@@ -752,6 +792,7 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
           "posing",
           "copying",
           "drawing",
+          "recording",
           "judging",
           "reveal",
           "story",
@@ -760,7 +801,7 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       );
       if (room.phase === "voting") score(room, now);
       else if (room.phase === "posing") nextQuestion(room, now);
-      else if (room.phase === "copying" || room.phase === "drawing")
+      else if (["copying", "drawing", "recording"].includes(room.phase))
         openJudging(room, now);
       else if (room.phase === "judging") scoreFace(room, now);
       else if (room.phase === "reading") enter(room, "discussion", now);
@@ -803,6 +844,59 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       }
       break;
     }
+    case "audio": {
+      fail(room.phase === "recording", "Jingles are closed for this round.");
+      active();
+      const q = room.queue[room.questionIndex];
+      fail(
+        q.type === "audio" && data.questionId === q.id,
+        "That jingle belongs to a different question.",
+      );
+      const clip = String(data.clip ?? "");
+      fail(
+        clip.length <= MAX_AUDIO_DATA_LENGTH &&
+          /^data:audio\/wav;base64,[A-Za-z0-9+/]+={0,2}$/.test(clip),
+        "Record a short jingle and try again.",
+      );
+      const base64 = clip.slice("data:audio/wav;base64,".length),
+        bytes = Buffer.from(base64, "base64");
+      fail(bytes.toString("base64") === base64, "Record that jingle again.");
+      try {
+        jingleDuration(bytes);
+      } catch (error) {
+        throw new GameError(error.message);
+      }
+      room.clips ??= {};
+      room.clips[me.id] = clip;
+      room.audioSkipped = (room.audioSkipped ?? []).filter(
+        (id) => id !== me.id,
+      );
+      if (
+        room.players.every(
+          (p) => room.clips[p.id] || room.audioSkipped.includes(p.id),
+        )
+      )
+        openJudging(room, now);
+      break;
+    }
+    case "skip-audio": {
+      fail(room.phase === "recording", "Jingles are closed for this round.");
+      active();
+      fail(
+        data.questionId === room.queue[room.questionIndex].id,
+        "That jingle belongs to a different question.",
+      );
+      room.clips ??= {};
+      delete room.clips[me.id];
+      room.audioSkipped = [...new Set([...(room.audioSkipped ?? []), me.id])];
+      if (
+        room.players.every(
+          (p) => room.clips[p.id] || room.audioSkipped.includes(p.id),
+        )
+      )
+        openJudging(room, now);
+      break;
+    }
     case "face-vote": {
       fail(room.phase === "judging", "Judging is not open.");
       active();
@@ -811,7 +905,7 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
         data.questionId === q.id,
         "That vote belongs to a previous round. Refresh and try again.",
       );
-      fail(data.playerId !== me.id, "You can’t vote for your own photo.");
+      fail(data.playerId !== me.id, "You can’t vote for your own entry.");
       fail(
         entriesFor(room).includes(data.playerId),
         "Choose one of the entries.",
@@ -896,6 +990,8 @@ export function apply(room, token, action, data = {}, now = Date.now()) {
       room.results = [];
       room.votes = {};
       room.shots = {};
+      room.clips = {};
+      room.audioSkipped = [];
       room.questionIndex = 0;
       room.locked = false;
       delete room.promptPack;
@@ -930,6 +1026,7 @@ export function snapshot(room, token, now = Date.now()) {
     locked: room.locked,
     settings: room.settings,
     flowVersion: room.flowVersion ?? 1,
+    mixGameNumber: room.mixGameNumber ?? 0,
     needsAnswers: Boolean(room.needsAnswers),
     ageGroup: me.ageGroup === null ? null : (me.ageGroup ?? "adult"),
     promptPack: promptPackForRoom(room),
@@ -976,6 +1073,8 @@ export function snapshot(room, token, now = Date.now()) {
       : [],
     // Who has a photo in this round (the photos themselves come from photosFor).
     shotIds: Object.keys(room.shots ?? {}),
+    clipIds: Object.keys(room.clips ?? {}),
+    audioSkippedIds: room.audioSkipped ?? [],
     nextReadyIds:
       room.phase === "reveal" ? Object.keys(room.nextReady ?? {}) : [],
     result,
@@ -1008,6 +1107,26 @@ export function photosFor(room, token, now = Date.now()) {
     questionId: q.id,
     photos: Object.fromEntries(
       visible.filter((id) => shots[id]).map((id) => [id, shots[id]]),
+    ),
+  };
+}
+
+export function audioFor(room, token, now = Date.now()) {
+  const me = authorize(room, token, now),
+    q = room.queue[room.questionIndex];
+  if (q?.type !== "audio") return { questionId: null, clips: {} };
+  const visible =
+    room.phase === "recording"
+      ? [me.id]
+      : ["judging", "reveal"].includes(room.phase)
+        ? Object.keys(room.clips ?? {})
+        : [];
+  return {
+    questionId: q.id,
+    clips: Object.fromEntries(
+      visible
+        .filter((id) => room.clips?.[id])
+        .map((id) => [id, room.clips[id]]),
     ),
   };
 }

@@ -1,3 +1,4 @@
+import { MAX_REQUEST_LENGTH } from "../public/audio-format.js";
 import { DurableObject } from "cloudflare:workers";
 import { createHash } from "node:crypto";
 import { api, SECURITY_HEADERS } from "./api.mjs";
@@ -50,7 +51,7 @@ async function readBody(request) {
     const { value, done } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > 64000) {
+    if (size > MAX_REQUEST_LENGTH) {
       await reader.cancel();
       return null;
     }
@@ -76,13 +77,14 @@ export default {
       return response({ inviteOrigin: new URL(request.url).origin });
     const create = path === "/api/rooms" && method === "POST";
     const match = path.match(
-      /^\/api\/rooms\/([A-Z2-9]{6})(?:\/(join|action|photos))?$/,
+      /^\/api\/rooms\/([A-Z2-9]{6})(?:\/(join|action|photos|audio))?$/,
     );
     if (!create && !match) return response({ error: "Not found." }, 404);
     const operation = match?.[2];
     if (
       !create &&
-      method !== (operation && operation !== "photos" ? "POST" : "GET")
+      method !==
+        (operation && !["photos", "audio"].includes(operation) ? "POST" : "GET")
     )
       return response({ error: "Method not allowed." }, 405);
     try {

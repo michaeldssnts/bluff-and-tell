@@ -1,3 +1,4 @@
+import { MAX_REQUEST_LENGTH } from "../public/audio-format.js";
 import { enableSimpleFlow } from "./engine.mjs";
 import { createHash } from "node:crypto";
 import {
@@ -9,6 +10,7 @@ import {
   tick,
   snapshot,
   photosFor,
+  audioFor,
   GameError,
 } from "./engine.mjs";
 export const SECURITY_HEADERS = {
@@ -22,8 +24,8 @@ export async function api(
   store,
 ) {
   try {
-    // Room for one resized photo (about 60 KB); everything else is far smaller.
-    if (body.length > 64000)
+    // Bounded uploads: resized photos and five-second normalised jingles.
+    if (body.length > MAX_REQUEST_LENGTH)
       throw new GameError("That submission is too large.", 413);
     let data = {};
     if (body) {
@@ -33,6 +35,8 @@ export async function api(
         throw new GameError("Invalid submission.");
       }
     }
+    if (body.length > 64000 && data?.action !== "audio")
+      throw new GameError("That submission is too large.", 413);
     if (!data || typeof data !== "object" || Array.isArray(data))
       throw new GameError("Invalid submission.");
     const fingerprint = createHash("sha256")
@@ -58,7 +62,7 @@ export async function api(
       throw new GameError("Could not create a room. Please try again.", 503);
     }
     const match = path.match(
-      /^\/api\/rooms\/([A-Z2-9]{6})(?:\/(join|action|photos))?$/,
+      /^\/api\/rooms\/([A-Z2-9]{6})(?:\/(join|action|photos|audio))?$/,
     );
     if (!match) throw new GameError("Not found.", 404);
     const [, code, operation] = match;
@@ -83,6 +87,11 @@ export async function api(
         }),
       };
     }
+    if (operation === "audio" && method === "GET")
+      return {
+        status: 200,
+        data: await store.mutate(code, (room) => audioFor(room, token)),
+      };
     if (operation === "photos" && method === "GET")
       return {
         status: 200,
