@@ -21,6 +21,16 @@
   <body>
     <a class="skip-link" href="#main">Skip to game</a>
     <div id="app"></div>
+    <!-- Keep this outside the updating room screen while a phone camera is open. -->
+    <input
+      type="file"
+      accept="image/*"
+      capture="user"
+      id="photo-input"
+      class="sr-only"
+      tabindex="-1"
+      aria-hidden="true"
+    />
     <div id="toast" role="status" aria-live="polite"></div>
     <dialog
       id="invite-qr-dialog"
@@ -156,6 +166,12 @@
         players see your answer options during your question, and the truth and
         votes at the reveal. The host sees readiness counts, not your private
         answer sheet.
+      </p>
+      <p>
+        Photos, doodles and voice clips are shared within your room and cleared
+        as the game moves on. Unsent photo previews stay in this tab so you can
+        retry; they’re cleared when sent or you leave the round. Your microphone
+        is used only when you tap Record.
       </p>
       <p>
         Rooms expire after 24 hours. Expired data is inaccessible immediately

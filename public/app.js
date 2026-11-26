@@ -1,3 +1,9 @@
+import {
+  PHOTO_FILTERS,
+  PhotoDraft,
+  preparePhoto,
+  applyPhotoFilter,
+} from "/photo-tools.js";
 import { rankedScores, RevealChime } from "/reveal-effects.js";
 import { JingleRecorder } from "/jingle-recorder.js";
 import { createInviteQr, roomInviteUrl, sessionForInvite } from "/invite-qr.js";
@@ -546,79 +552,143 @@ async function loadPhotos() {
   if (key === photoKey) return;
   photoKey = key;
   try {
-    const data = await request(`/api/rooms/${session.code}/photos`);
-    if (data.questionId !== room?.question?.id) return;
+    const captured = session;
+    const data = await request(`/api/rooms/${captured.code}/photos`);
+    if (
+      session !== captured ||
+      data.questionId !== room?.question?.id ||
+      key !== photoKey
+    )
+      return;
     photoCache = {
       questionId: data.questionId,
-      photos: {
-        ...(photoCache.questionId === data.questionId ? photoCache.photos : {}),
-        ...data.photos,
-      },
+      photos: data.photos,
     };
     render(true);
   } catch {
     photoKey = "";
   }
 }
-// Shrink to a small square JPEG on the phone, so uploads are quick and rooms stay light.
-async function shrinkPhoto(file) {
-  let source;
-  try {
-    source = await createImageBitmap(file, { imageOrientation: "from-image" });
-  } catch {
-    source = await new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = URL.createObjectURL(file);
-    });
-  }
-  const w = source.width,
-    h = source.height,
-    side = Math.min(w, h),
-    size = 320,
-    canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  canvas
-    .getContext("2d")
-    .drawImage(
-      source,
-      (w - side) / 2,
-      (h - side) / 2,
-      side,
-      side,
-      0,
-      0,
-      size,
-      size,
-    );
-  let quality = 0.75,
-    data = canvas.toDataURL("image/jpeg", quality);
-  while (data.length > 56000 && quality > 0.3)
-    data = canvas.toDataURL("image/jpeg", (quality -= 0.1));
-  return data;
+const photoDraft = new PhotoDraft({
+  getItem: (key) => sessionStorage.getItem(key),
+  setItem: (key, value) => sessionStorage.setItem(key, value),
+  removeItem: (key) => sessionStorage.removeItem(key),
+});
+let photoSending = false;
+let photoCapture = null,
+  photoGeneration = 0,
+  photoError = "";
+const photoContext = () =>
+  room?.question
+    ? { code: room.code, playerId: room.me, questionId: room.question.id }
+    : null;
+const samePhotoContext = (context) =>
+  context &&
+  ["code", "playerId", "questionId"].every(
+    (key) => context[key] === photoContext()?.[key],
+  );
+function clearPhotoDraft() {
+  photoGeneration++;
+  photoCapture = null;
+  photoDraft.clear();
+  photoError = "";
+}
+function openPhotoPicker() {
+  if (photoBusy || busy || room?.pausedRemaining !== null) return;
+  photoCapture = photoContext();
+  const input = $("#photo-input");
+  input.value = "";
+  input.click();
 }
 async function uploadPhoto(file) {
+  const captured = photoCapture;
   if (!file || photoBusy) return;
+  if (!samePhotoContext(captured)) {
+    toast("The room moved on. That photo wasn’t sent.");
+    return;
+  }
+  const generation = ++photoGeneration;
   photoBusy = true;
+  photoError = "";
   render(true);
   try {
-    const image = await shrinkPhoto(file);
-    const questionId = room.question.id;
-    photoCache =
-      photoCache.questionId === questionId
-        ? { questionId, photos: { ...photoCache.photos, [room.me]: image } }
-        : { questionId, photos: { [room.me]: image } };
-    await send("photo", { questionId, image });
-  } catch {
-    toast("That photo didn’t upload. Check your connection and try again.");
+    const image = await preparePhoto(file);
+    if (generation !== photoGeneration || !samePhotoContext(captured)) return;
+    photoDraft.set(captured, image);
+  } catch (error) {
+    if (generation === photoGeneration) photoError = error.message;
+  } finally {
+    photoBusy = false;
+    $("#photo-input").value = "";
+    render(true);
+  }
+}
+async function filterPhoto(filter) {
+  if (photoBusy || !photoDraft.matches(photoContext())) return;
+  const generation = ++photoGeneration,
+    draft = photoDraft.value;
+  photoBusy = true;
+  photoError = "";
+  render(true);
+  try {
+    const image = await applyPhotoFilter(draft.source, filter);
+    if (
+      generation === photoGeneration &&
+      photoDraft.value === draft &&
+      samePhotoContext(draft)
+    )
+      photoDraft.filtered(filter, image);
+  } catch (error) {
+    if (generation === photoGeneration) photoError = error.message;
   } finally {
     photoBusy = false;
     render(true);
   }
 }
+async function sendPhoto() {
+  const draft = photoDraft.value;
+  if (photoBusy || !photoDraft.matches(photoContext())) return;
+  if (busy) {
+    photoError =
+      "Still sending something else. Your photo’s safe—try again in a moment.";
+    render(true);
+    return;
+  }
+  const actionSession = session;
+  photoBusy = true;
+  photoSending = true;
+  photoError = "";
+  draft.requestId ??= uuid();
+  photoDraft.save();
+  render(true);
+  try {
+    const response = await send(
+      "photo",
+      { questionId: draft.questionId, image: draft.image },
+      draft.requestId,
+    );
+    if (session !== actionSession || !samePhotoContext(draft)) return;
+    if (!response?.room?.shotIds?.includes(draft.playerId))
+      throw new Error("We couldn’t confirm your photo. Tap Send again.");
+    if (photoDraft.value === draft) photoDraft.clear();
+    if (photoCache.questionId !== draft.questionId)
+      photoCache = { questionId: draft.questionId, photos: {} };
+    photoCache.photos[draft.playerId] = draft.image;
+    photoKey = "";
+    loadPhotos();
+    toast("Photo sent. Nailed it!");
+  } catch (error) {
+    if (samePhotoContext(draft))
+      photoError = `${error.message} Your photo’s saved here. Tap Send to retry.`;
+  } finally {
+    photoBusy = false;
+    photoSending = false;
+    render(true);
+  }
+}
 function photoButton(label) {
-  return `<button class="button primary full photo-button" type="button" data-take-photo ${photoBusy || room.pausedRemaining !== null ? "disabled" : ""}>${icon("camera", 20)} ${photoBusy ? "Uploading your photo…" : label}</button><input type="file" accept="image/*" capture="user" id="photo-input" class="sr-only" tabindex="-1" aria-hidden="true">`;
+  const draft = photoDraft.matches(photoContext()) ? photoDraft.value : null;
+  return `${photoError ? `<p class="field-error" role="alert">${esc(photoError)}</p>` : ""}${draft ? `<section class="photo-editor" aria-label="Photo preview and filters"><img class="photo-draft-preview" src="${draft.image}" alt="Your photo preview with the ${esc(draft.filter)} filter"><div class="photo-filters" role="group" aria-label="Photo filters">${PHOTO_FILTERS.map(([id, label]) => `<button type="button" class="photo-filter ${draft.filter === id ? "selected" : ""}" data-photo-filter="${id}" aria-pressed="${draft.filter === id}" ${photoBusy ? "disabled" : ""}>${label}</button>`).join("")}</div><p class="muted center">Pick a filter. Unleash that face.</p><button class="button primary full photo-button" type="button" data-send-photo ${photoBusy || busy || room.pausedRemaining !== null ? "disabled" : ""}>${icon("check", 20)} ${photoBusy ? (photoSending ? "Sending photo…" : "Getting your photo ready…") : photoError ? "Retry sending photo" : "Send my photo"}</button><button class="text-button" type="button" data-take-photo ${photoBusy ? "disabled" : ""}>Take another photo</button></section>` : `<button class="button primary full photo-button" type="button" data-take-photo ${photoBusy || busy || room.pausedRemaining !== null ? "disabled" : ""}>${icon("camera", 20)} ${photoBusy ? "Getting your photo ready…" : label}</button>`}`;
 }
 function facePhoto(id, caption, extra = "") {
   const src = photoOf(id);
@@ -934,9 +1004,9 @@ function faceScreen() {
     body = `<div class="face-target">${facePhoto(q.playerId, `${esc(poser.name)}’s face`, "target")}</div>${
       mine
         ? `<p class="phase-message center">Your work here is done. Watch them try.</p>`
-        : myShot
-          ? `<div class="face-mine">${facePhoto(room.me, "Your copy")}<div><p class="next-status">${icon("check", 17)} Copy sent!</p><button class="button secondary full" type="button" data-take-photo ${photoBusy ? "disabled" : ""}>${icon("camera", 18)} ${photoBusy ? "Uploading…" : "Retake my copy"}</button><input type="file" accept="image/*" capture="user" id="photo-input" class="sr-only" tabindex="-1" aria-hidden="true"></div></div>`
-          : `<p class="phase-message center">Copy that face.</p>${photoButton("Snap your copy")}`
+        : photoDraft.matches(photoContext()) || !myShot
+          ? `<p class="phase-message center">Copy that face.</p>${photoButton("Snap your copy")}`
+          : `<div class="face-mine">${facePhoto(room.me, "Your copy")}<div><p class="next-status">${icon("check", 17)} Copy sent!</p><button class="button secondary full" type="button" data-take-photo ${photoBusy ? "disabled" : ""}>${icon("camera", 18)} Retake my copy</button></div></div>`
     }${waitingChips(
       copierIds().filter((id) => !shots.includes(id)),
       "STILL SNAPPING",
@@ -1281,7 +1351,29 @@ function accept(data) {
       ["asking", "recording", "processing"].includes(jingle.status)
     )
       jingle.cancel();
+    const oldPhotoContext = photoContext();
     room = data.room;
+    if (!samePhotoContext(oldPhotoContext)) {
+      photoCache = { questionId: null, photos: {} };
+      photoKey = "";
+      photoGeneration++;
+      photoCapture = null;
+      photoError = "";
+      if (
+        room.question?.type === "face" &&
+        ["posing", "copying"].includes(room.phase)
+      )
+        photoDraft.restore(photoContext());
+      else photoDraft.clear();
+    }
+    if (
+      room.question?.type !== "face" ||
+      !["posing", "copying"].includes(room.phase) ||
+      (room.phase === "copying" && room.question.playerId === room.me)
+    ) {
+      photoDraft.clear();
+      photoCapture = null;
+    }
     if (["face", "doodle"].includes(room.question?.type)) loadPhotos();
     if (room.question?.type === "audio") loadAudio();
     if (
@@ -1316,19 +1408,19 @@ function accept(data) {
     render();
   }
 }
-async function send(action, data = {}) {
-  if (busy) return;
+async function send(action, data = {}, requestId = uuid()) {
+  if (busy) throw new Error("Still sending. Try again in a moment.");
   const actionSession = session;
   busy = true;
   document
     .querySelectorAll(
-      "button[data-action],button[data-option],button[data-length],button[data-jingle],#answers-form button",
+      "button[data-action],button[data-option],button[data-length],button[data-jingle],button[data-send-photo],#answers-form button",
     )
     .forEach((b) => (b.disabled = true));
   try {
     const response = await request(`/api/rooms/${session.code}/action`, {
       method: "POST",
-      body: { action, data, requestId: uuid() },
+      body: { action, data, requestId },
     });
     if (session !== actionSession) return response;
     if (response.left) {
@@ -1366,6 +1458,9 @@ async function exitRoom() {
   reset();
 }
 function reset() {
+  photoCache = { questionId: null, photos: {} };
+  photoKey = "";
+  clearPhotoDraft();
   jingle.cancel();
   audioCache = { questionId: null, clips: {} };
   audioKey = "";
@@ -1878,7 +1973,9 @@ document.addEventListener("click", async (e) => {
     send("settings", { totalRounds: Number(t.dataset.length) }).catch(() => {});
   else if (t.matches("[data-action]")) send(t.dataset.action).catch(() => {});
   else if (t.matches("[data-swap]")) swapPrompt(t.dataset.swap);
-  else if (t.matches("[data-take-photo]")) $("#photo-input")?.click();
+  else if (t.matches("[data-take-photo]")) openPhotoPicker();
+  else if (t.matches("[data-photo-filter]")) filterPhoto(t.dataset.photoFilter);
+  else if (t.matches("[data-send-photo]")) sendPhoto();
   else if (t.matches("[data-pad-colour]")) {
     // Tool changes update in place: no full redraw, so no flicker while drawing.
     pad.colour = t.dataset.padColour;

@@ -339,13 +339,8 @@ test("face-off photos upload through the API and are only shown when allowed", a
   const guest = (
     await call(base + "/join", "POST", { ageGroup: "adult", name: "Tumi" })
   ).data;
-  const act = (token, action, data = {}) =>
-    call(
-      base + "/action",
-      "POST",
-      { action, data, requestId: randomUUID() },
-      token,
-    );
+  const act = (token, action, data = {}, requestId = randomUUID()) =>
+    call(base + "/action", "POST", { action, data, requestId }, token);
   await act(host.token, "settings", { mode: "faces" });
   const started = await act(host.token, "start");
   assert.equal(started.data.room.phase, "posing");
@@ -369,6 +364,25 @@ test("face-off photos upload through the API and are only shown when allowed", a
     image: "data:image/jpeg;base64," + "A".repeat(70000),
   });
   assert.equal(tooBig.status, 413);
+  // A retry after a lost response must acknowledge the same upload even after judging opens.
+  const retryId = randomUUID();
+  const copied = await act(
+    copier.token,
+    "photo",
+    { questionId: q.id, image },
+    retryId,
+  );
+  assert.equal(copied.status, 200);
+  assert.equal(copied.data.room.phase, "judging");
+  const replayed = await act(
+    copier.token,
+    "photo",
+    { questionId: q.id, image },
+    retryId,
+  );
+  assert.equal(replayed.status, 200);
+  assert.deepEqual(replayed.data.room.shotIds, copied.data.room.shotIds);
+
   assert.equal(
     (await call(base + "/photos", "GET", undefined, "nope")).status,
     401,

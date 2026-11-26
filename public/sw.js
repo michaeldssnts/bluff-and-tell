@@ -1,9 +1,10 @@
-const CACHE = "bluff-and-tell-v32";
+const CACHE = "bluff-and-tell-v33";
 const ASSETS = [
   "/",
   "/index.html",
   "/styles.css",
   "/app.js",
+  "/photo-tools.js",
   "/reveal-effects.js",
   "/audio-format.js",
   "/jingle-recorder.js",

@@ -2997,3 +2997,53 @@ textarea[aria-invalid="true"] {
     font-size: 2.3rem;
   }
 }
+
+.photo-editor {
+  max-width: 440px;
+  margin: 18px auto;
+  text-align: center;
+}
+.photo-draft-preview {
+  display: block;
+  width: min(100%, 320px);
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 24px;
+  border: 3px solid #c5a2ff;
+  margin: 0 auto 16px;
+}
+.photo-filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.photo-filter {
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid #a58bbd;
+  background: #382451;
+  color: #fff9f2;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.photo-filter.selected {
+  background: #d8fa85;
+  color: #211439;
+  border-color: #d8fa85;
+}
+.photo-filter:focus-visible {
+  outline: 3px solid #ffadd1;
+  outline-offset: 3px;
+}
+.photo-filter:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.photo-editor > .text-button {
+  min-height: 44px;
+  margin-top: 10px;
+}
